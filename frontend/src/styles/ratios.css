@@ -1,0 +1,84 @@
+.fin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.fin-table th, .fin-table td {
+  padding: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.fin-table tr.good td { color: #16a34a; }
+.fin-table tr.caution td { color: #eab308; }
+.fin-table tr.poor td { color: #dc2626; }
+
+.grid-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.grid-form h3 {
+  grid-column: 1 / -1;
+  color: #2563eb;
+  font-size: 1.1rem;
+  margin-top: 15px;
+}
+
+.grid-form input {
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.grid-form button {
+  grid-column: 1 / -1;
+  padding: 10px;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.grid-form button:hover {
+  background-color: #1d4ed8;
+}
+
+.summary-card {
+  border-radius: 10px;
+  padding: 20px;
+  margin: 20px 0;
+  text-align: center;
+  font-weight: 600;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+}
+
+.summary-card h2 {
+  font-size: 1.3rem;
+  margin-bottom: 10px;
+}
+
+.summary-card .score {
+  font-size: 2.5rem;
+  margin: 0;
+}
+
+.summary-card.good {
+  background: #ecfdf5;
+  color: #047857;
+  border: 2px solid #10b981;
+}
+
+.summary-card.caution {
+  background: #fefce8;
+  color: #b45309;
+  border: 2px solid #facc15;
+}
+
+.summary-card.poor {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 2px solid #ef4444;
+}
