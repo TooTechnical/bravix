@@ -1,30 +1,43 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import financial_analysis
 
-app = FastAPI(title="Bravix API", version="1.0")
+# --------------------------------------------------------
+# 1️⃣ Create FastAPI instance
+# --------------------------------------------------------
+app = FastAPI(
+    title="Bravix API",
+    version="1.0",
+    description="Backend for the Bravix Financial Analysis Demo",
+)
 
-# Allow both local dev and deployed frontends
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    # Your permanent or preview Vercel URLs
-    "https://bravix.vercel.app",
-    "https://bravix-demo.vercel.app",
-    "https://bravix-6o5vkphfg-tootechnicals-projects.vercel.app",
-]
-
+# --------------------------------------------------------
+# 2️⃣ Configure CORS
+# --------------------------------------------------------
+# During testing, we use "*" to allow all origins (so Vercel can reach it).
+# Once confirmed working, replace "*" with your actual domains.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],  # <-- temporarily allow all
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# --------------------------------------------------------
+# 3️⃣ Import routes (AFTER CORS middleware)
+# --------------------------------------------------------
+from app.routers import financial_analysis
+
+
+# --------------------------------------------------------
+# 4️⃣ Root endpoint for quick API check
+# --------------------------------------------------------
 @app.get("/")
 def root():
     return {"message": "Bravix Demo API running"}
 
-# Include your financial analysis routes
+
+# --------------------------------------------------------
+# 5️⃣ Include all routers
+# --------------------------------------------------------
 app.include_router(financial_analysis.router)
