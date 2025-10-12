@@ -8,8 +8,10 @@ app = FastAPI(title="Bravix API", version="1.0")
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    # Your permanent or preview Vercel URLs
     "https://bravix.vercel.app",
     "https://bravix-demo.vercel.app",
+    "https://bravix-6o5vkphfg-tootechnicals-projects.vercel.app",
 ]
 
 app.add_middleware(
