@@ -4,10 +4,12 @@ from app.routers import financial_analysis
 
 app = FastAPI(title="Bravix API", version="1.0")
 
-# Allow both localhost and 127.0.0.1
+# Allow both local dev and deployed frontends
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://bravix.vercel.app",
+    "https://bravix-demo.vercel.app",
 ]
 
 app.add_middleware(
