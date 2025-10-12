@@ -16,34 +16,45 @@ function App() {
     try {
       const payload = Object.fromEntries(new FormData(e.target));
 
-      // Convert all inputs to floats, leave empty as null
+      // Convert all inputs to floats (leave empty as null)
       Object.keys(payload).forEach((k) => {
         const val = parseFloat(payload[k]);
         payload[k] = isNaN(val) ? null : val;
       });
 
-      // Debugging log: confirm the API URL
+      // Debug log – confirm API endpoint and API key are loaded
       console.log("Using API endpoint:", import.meta.env.VITE_API_URL);
+      console.log("Using API key:", import.meta.env.VITE_API_KEY ? "Loaded ✅" : "Missing ⚠️");
 
-      // Perform the POST request to your FastAPI backend
+      // Perform the POST request to FastAPI backend with API key
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/financial-analysis`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": import.meta.env.VITE_API_KEY, // secure API key
+          },
           body: JSON.stringify(payload),
         }
       );
 
       if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
+        if (response.status === 401) {
+          throw new Error("Access denied: Invalid or missing API key.");
+        } else {
+          throw new Error(`Server error: ${response.status}`);
+        }
       }
 
       const json = await response.json();
       setData(json);
     } catch (err) {
       console.error("Error submitting form:", err);
-      setError("Unable to reach analysis service. Please try again later.");
+      setError(
+        err.message ||
+          "Unable to reach analysis service. Please try again later."
+      );
     } finally {
       setLoading(false);
     }
@@ -64,8 +75,14 @@ function App() {
         />
         <input name="stocks" placeholder="Stocks / Inventory (€)" />
         <input name="cash" placeholder="Cash (€)" />
-        <input name="short_term_investments" placeholder="Short-term Investments (€)" />
-        <input name="short_term_liabilities" placeholder="Short-term Liabilities (€)" />
+        <input
+          name="short_term_investments"
+          placeholder="Short-term Investments (€)"
+        />
+        <input
+          name="short_term_liabilities"
+          placeholder="Short-term Liabilities (€)"
+        />
 
         {/* TURNOVER */}
         <h3>Turnover</h3>
@@ -92,7 +109,10 @@ function App() {
           name="monthly_debt_payments"
           placeholder="Monthly Debt Payments (€)"
         />
-        <input name="profit_from_investment" placeholder="Profit from Investment (€)" />
+        <input
+          name="profit_from_investment"
+          placeholder="Profit from Investment (€)"
+        />
         <input name="investment_cost" placeholder="Investment Cost (€)" />
         <input name="general_debt" placeholder="General Debt (€)" />
         <input name="ebitda" placeholder="EBITDA (€)" />
