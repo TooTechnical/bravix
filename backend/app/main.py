@@ -1,43 +1,27 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# --------------------------------------------------------
-# 1️⃣ Create FastAPI instance
-# --------------------------------------------------------
-app = FastAPI(
-    title="Bravix API",
-    version="1.0",
-    description="Backend for the Bravix Financial Analysis Demo",
-)
+# --- Create FastAPI App ---
+app = FastAPI(title="Bravix API", version="1.0")
 
-# --------------------------------------------------------
-# 2️⃣ Configure CORS
-# --------------------------------------------------------
-# During testing, we use "*" to allow all origins (so Vercel can reach it).
-# Once confirmed working, replace "*" with your actual domains.
+# --- CORS Setup (Allow Everything Temporarily) ---
+# This guarantees Vercel can talk to Render.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # <-- temporarily allow all
+    allow_origins=["*"],  # temporary wildcard — full open access
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --------------------------------------------------------
-# 3️⃣ Import routes (AFTER CORS middleware)
-# --------------------------------------------------------
-from app.routers import financial_analysis
+# --- Import Routers AFTER Middleware ---
+try:
+    from app.routers import financial_analysis
+    app.include_router(financial_analysis.router)
+except Exception as e:
+    print(f"⚠️ Router load failed: {e}")
 
-
-# --------------------------------------------------------
-# 4️⃣ Root endpoint for quick API check
-# --------------------------------------------------------
+# --- Root Endpoint for Quick Check ---
 @app.get("/")
 def root():
-    return {"message": "Bravix Demo API running"}
-
-
-# --------------------------------------------------------
-# 5️⃣ Include all routers
-# --------------------------------------------------------
-app.include_router(financial_analysis.router)
+    return {"message": "Bravix Demo API running (CORS Enabled)"}
