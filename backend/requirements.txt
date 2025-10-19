@@ -1,4 +1,9 @@
 fastapi
 uvicorn
+pdfminer.six
 pandas
+openpyxl
 python-multipart
+pydantic
+python-docx
+
