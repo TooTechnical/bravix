@@ -5,7 +5,7 @@ import traceback
 
 router = APIRouter()
 
-@router.post("/analyze")
+@router.post("/api/analyze")
 async def analyze_financials(payload: dict):
     """
     Accepts parsed financial data (from CSV, PDF, Excel, etc.),

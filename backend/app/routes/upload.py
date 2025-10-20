@@ -3,7 +3,7 @@ from app.utils.parsers import parse_file
 
 router = APIRouter()
 
-@router.post("/upload")
+@router.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
         # Pass the UploadFile object directly — parser handles reading
