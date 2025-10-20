@@ -21,12 +21,11 @@ app = FastAPI(
 # 3️⃣ CORS configuration (Restricted + Local Dev)
 # -------------------------------------------------
 ALLOWED_ORIGINS = [
-    "https://bravix.vercel.app",
-    "https://bravix-pi.vercel.app",
-    "https://bravix-1rr5nkf0f-tootechnicals-projects.vercel.app",
-    "https://bravix-nxch5n4g6-tootechnicals-projects.vercel.app",
-    "http://localhost:5173",
-    "http://localhost:3000",
+    "https://bravix-ai.vercel.app",     # main website
+    "https://bravix-pi.vercel.app",     # AI Analyzer frontend
+    "https://bravix.vercel.app",        # backup domain if used
+    "http://localhost:5173",            # local dev (Vite)
+    "http://localhost:3000",            # local dev (React)
 ]
 
 app.add_middleware(
