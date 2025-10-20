@@ -6,4 +6,8 @@ openpyxl
 python-multipart
 pydantic
 python-docx
+pytesseract
+pdf2image
+Pillow
+
 
