@@ -1,23 +1,24 @@
-from fastapi import FastAPI, Request, Header, HTTPException, Depends
+from fastapi import FastAPI, Request, Header, HTTPException, Depends, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import financial_analysis
-from app.routes import upload, analyze  # 🆕 New imports
+from app.routes import financial_analysis, upload, analyze
 from dotenv import load_dotenv
 
+# -------------------------------------------------
+# 1️⃣ Load environment variables
+# -------------------------------------------------
 load_dotenv()
 
-
 # -------------------------------------------------
-# 1️⃣ Create FastAPI instance
+# 2️⃣ Create FastAPI instance
 # -------------------------------------------------
 app = FastAPI(
     title="Bravix API",
-    version="1.2",
-    description="Secure backend for Bravix Financial Analysis & AI Demo"
+    version="1.3",
+    description="Secure backend for Bravix Financial Analysis & AI Demo",
 )
 
 # -------------------------------------------------
-# 2️⃣ CORS configuration (Restricted + Local Dev)
+# 3️⃣ CORS configuration (Restricted + Local Dev)
 # -------------------------------------------------
 ALLOWED_ORIGINS = [
     "https://bravix.vercel.app",
@@ -25,7 +26,7 @@ ALLOWED_ORIGINS = [
     "https://bravix-1rr5nkf0f-tootechnicals-projects.vercel.app",
     "https://bravix-nxch5n4g6-tootechnicals-projects.vercel.app",
     "http://localhost:5173",
-    "http://localhost:3000"
+    "http://localhost:3000",
 ]
 
 app.add_middleware(
@@ -37,9 +38,9 @@ app.add_middleware(
 )
 
 # -------------------------------------------------
-# 3️⃣ Simple API Key Security Layer
+# 4️⃣ Simple API Key Security Layer
 # -------------------------------------------------
-API_KEY = "BRAVIX-DEMO-SECURE-KEY-2025"  # 🔐 Change this before production
+API_KEY = "BRAVIX-DEMO-SECURE-KEY-2025"  # 🔐 Change before production
 
 async def verify_api_key(x_api_key: str = Header(None)):
     """Ensures that every request includes the correct API key header."""
@@ -47,9 +48,9 @@ async def verify_api_key(x_api_key: str = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid or missing API Key")
 
 # -------------------------------------------------
-# 4️⃣ Include routers (financial + AI + upload)
+# 5️⃣ Include Routers (Financial + AI + Upload)
 # -------------------------------------------------
-# Apply API key check globally to the protected endpoints
+# Financial analysis routes
 app.include_router(
     financial_analysis.router,
     prefix="/api/financial",
@@ -57,7 +58,7 @@ app.include_router(
     dependencies=[Depends(verify_api_key)],
 )
 
-# 🧠 AI & File Upload Routes (secured the same way)
+# Upload routes
 app.include_router(
     upload.router,
     prefix="/api",
@@ -65,6 +66,7 @@ app.include_router(
     dependencies=[Depends(verify_api_key)],
 )
 
+# AI analysis routes
 app.include_router(
     analyze.router,
     prefix="/api",
@@ -73,27 +75,37 @@ app.include_router(
 )
 
 # -------------------------------------------------
-# 5️⃣ Root endpoint
+# 6️⃣ Alias route (for old frontend endpoint)
+# -------------------------------------------------
+alias_router = APIRouter()
+
+@alias_router.post("/api/financial-analysis")
+async def alias_financial_analysis(payload: dict, x_api_key: str = Header(None)):
+    """
+    Temporary alias endpoint for backward compatibility with old frontend.
+    Redirects to the main /api/financial/analysis route.
+    """
+    from app.routes.financial_analysis import analyze_financial_data
+    return await analyze_financial_data(payload)
+
+app.include_router(alias_router)
+
+# -------------------------------------------------
+# 7️⃣ Root & Utility Endpoints
 # -------------------------------------------------
 @app.get("/")
 def root():
     return {"message": "Bravix Demo API running (CORS + API Key Secured)"}
 
-# -------------------------------------------------
-# 6️⃣ Debug endpoint (optional)
-# -------------------------------------------------
 @app.get("/debug-cors")
 async def debug_cors(request: Request):
     origin = request.headers.get("origin")
     return {
         "your_origin_header": origin,
         "allowed_origins": ALLOWED_ORIGINS,
-        "message": "CORS and API key system active"
+        "message": "CORS and API key system active",
     }
 
-# -------------------------------------------------
-# 7️⃣ Health check endpoint (for Render / monitoring)
-# -------------------------------------------------
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "Bravix.Ai backend healthy"}
