@@ -1,42 +1,67 @@
-# app/utils/analyzer.py
 """
-Performs AI + financial data analysis using OpenAI GPT-5 (or fallback simulation).
+Performs AI + financial data analysis using OpenAI GPT models (GPT-4o-mini).
+Includes graceful fallback and detailed error logging for Render.
 """
 
 import os
+import traceback
 from openai import OpenAI
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def analyze_data(payload: dict):
     """
     Processes parsed financial data and returns a GPT-based financial summary.
-    This demo version simulates AI analysis if the API key is missing.
+    Falls back to a simulated response if API access fails.
     """
     try:
-        # Convert financial data to readable text
-        data_text = str(payload)
+        # Convert the incoming data to readable text
+        data_text = payload.get("raw_text") or str(payload)
 
-        # --- If no OpenAI key found, fallback to mock analysis
-        if not os.getenv("OPENAI_API_KEY"):
+        # Check for OpenAI API key
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or not api_key.strip():
+            print("⚠️ No OpenAI API key found. Returning simulated analysis.")
             return {
-                "summary": "AI analysis unavailable (no API key).",
-                "insight": "Simulated analysis based on provided financial data.",
+                "summary": "AI analysis unavailable (no API key detected).",
+                "insight": "Simulated placeholder output based on financial data.",
             }
 
-        # --- Real GPT-powered analysis ---
+        # Initialize client dynamically
+        client = OpenAI(api_key=api_key)
+        print("🔑 OpenAI API key loaded successfully (first 6 chars):", api_key[:6])
+
+        # Compose the prompt
+        prompt = f"""
+        You are an advanced financial analyst AI.
+        Review the following company's financial data carefully and provide:
+        - A concise executive summary
+        - Key financial ratios or trends
+        - Credit risk score (0–100)
+        - Short reasoning behind the risk score
+
+        Financial Data:
+        {data_text}
+        """
+
+        # Call OpenAI chat completion
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o-mini",  # Stable, low-latency GPT-4 model
             messages=[
-                {"role": "system", "content": "You are a financial analysis assistant."},
-                {"role": "user", "content": f"Analyze this data: {data_text}"}
+                {"role": "system", "content": "You are a senior financial analyst."},
+                {"role": "user", "content": prompt.strip()},
             ],
+            temperature=0.6,
+            max_tokens=800,
         )
 
+        ai_output = response.choices[0].message.content.strip()
+        print("✅ AI response successfully generated (length):", len(ai_output))
+
         return {
-            "summary": response.choices[0].message.content.strip(),
-            "insight": "Analysis generated successfully using GPT-5.",
+            "summary": ai_output,
+            "insight": "Analysis generated successfully using GPT-4o-mini.",
         }
 
     except Exception as e:
+        print("❌ AI analysis failed:", str(e))
+        traceback.print_exc()
         return {"error": f"AI analysis failed: {str(e)}"}
