@@ -14,10 +14,23 @@ async def analyze_financials(payload: dict, x_api_key: str = Header(None)):
         # Perform AI + financial analysis
         result = analyze_data(payload)
 
+        # ✅ Extract analysis text safely
+        if isinstance(result, dict):
+            # If your analyzer returns a dict, try to find the AI summary text
+            analysis_text = (
+                result.get("analysis")
+                or result.get("ai_output")
+                or result.get("summary")
+                or str(result)
+            )
+        else:
+            analysis_text = str(result)
+
+        # ✅ Return in structure expected by frontend
         return {
             "status": "success",
             "message": "AI analysis complete",
-            "result": result,
+            "ai_analysis": analysis_text,  # frontend reads this field
         }
 
     except ValueError as e:
