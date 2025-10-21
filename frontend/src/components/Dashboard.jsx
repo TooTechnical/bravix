@@ -25,13 +25,9 @@ export default function Dashboard() {
     try {
       // 1️⃣ Upload file to backend
       const uploadRes = await uploadFile(file);
-
-      // The backend returns { status, message, data }
       const parsed = uploadRes.data || uploadRes.parsed_data || {};
-
-      if (!parsed || Object.keys(parsed).length === 0) {
+      if (!parsed || Object.keys(parsed).length === 0)
         throw new Error("Upload succeeded but no parsed data was returned.");
-      }
 
       // 2️⃣ Analyze parsed data using AI
       const analyzeRes = await analyzeData(parsed, parsed.raw_text || "");
@@ -58,29 +54,21 @@ export default function Dashboard() {
   const riskValue = riskMatch ? parseInt(riskMatch[1], 10) : null;
 
   function getRiskColor(score) {
-    if (score >= 70) return "#dc2626"; // red
-    if (score >= 40) return "#f59e0b"; // orange
-    return "#10b981"; // green
+    if (score >= 70) return "#dc2626";
+    if (score >= 40) return "#f59e0b";
+    return "#10b981";
   }
 
   // 🧾 Generate downloadable PDF
   function handleDownloadReport() {
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "pt",
-      format: "a4",
-    });
-
+    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
     doc.text("Braivix AI Financial Risk Report", 40, 50);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(12);
-    const splitText = doc.splitTextToSize(
-      aiText || "No report data available.",
-      520
-    );
+    const splitText = doc.splitTextToSize(aiText || "No report data available.", 520);
     doc.text(splitText, 40, 90);
 
     if (riskValue !== null) {
@@ -134,14 +122,24 @@ export default function Dashboard() {
       <section
         className="input-panel"
         style={{
-          background: "#1E293B",
+          background: "linear-gradient(180deg, #111827 0%, #1E293B 100%)",
           padding: "2rem",
-          borderRadius: "12px",
-          boxShadow: "0 0 20px rgba(0, 255, 208, 0.08)",
+          borderRadius: "14px",
+          boxShadow:
+            "0 0 25px rgba(0, 255, 208, 0.08), 0 0 60px rgba(0, 255, 208, 0.12)",
           width: "100%",
           maxWidth: "600px",
           marginBottom: "2rem",
+          transition: "box-shadow 0.3s ease, transform 0.3s ease",
         }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.boxShadow =
+            "0 0 35px rgba(0, 255, 208, 0.15), 0 0 70px rgba(0, 255, 208, 0.2)")
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.boxShadow =
+            "0 0 25px rgba(0, 255, 208, 0.08), 0 0 60px rgba(0, 255, 208, 0.12)")
+        }
       >
         <form onSubmit={handleAIAnalyze} style={{ textAlign: "center" }}>
           <label
@@ -161,11 +159,11 @@ export default function Dashboard() {
             style={{
               display: "block",
               margin: "0 auto 1rem",
-              padding: "0.5rem",
+              padding: "0.6rem",
               width: "100%",
               border: "1px solid #374151",
               borderRadius: "8px",
-              backgroundColor: "#111827",
+              backgroundColor: "#0F172A",
               color: "#E5E7EB",
             }}
           />
@@ -191,13 +189,7 @@ export default function Dashboard() {
         </form>
 
         {error && (
-          <div
-            style={{
-              color: "red",
-              marginTop: "1rem",
-              fontWeight: "500",
-            }}
-          >
+          <div style={{ color: "red", marginTop: "1rem", fontWeight: "500" }}>
             {error}
           </div>
         )}
@@ -319,7 +311,7 @@ export default function Dashboard() {
           color: "#9CA3AF",
         }}
       >
-        Prototype © Braivix Powered by GPT-5
+        Prototype © Braivix Powered by Braivix AI
       </footer>
     </div>
   );
