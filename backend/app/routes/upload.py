@@ -10,14 +10,24 @@ async def upload_file(file: UploadFile = File(...)):
     Receives a PDF, CSV, Excel, or Word file and passes it to the parser.
     """
     try:
-        # Parse the uploaded file (parse_file handles reading & format detection)
+        # The parse_file function handles file reading and content extraction
         parsed_data = parse_file(file)
-        return parsed_data
+
+        # Return parsed financial data to the frontend
+        return {
+            "status": "success",
+            "message": "File parsed successfully",
+            "data": parsed_data
+        }
 
     except ValueError as e:
-        # For known parsing issues
-        raise HTTPException(status_code=400, detail=f"Invalid file format: {str(e)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid or unsupported file format: {str(e)}"
+        )
 
     except Exception as e:
-        # For unexpected issues
-        raise HTTPException(status_code=500, detail=f"File parsing failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"File parsing failed: {str(e)}"
+        )
