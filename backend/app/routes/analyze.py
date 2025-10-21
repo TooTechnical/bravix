@@ -6,28 +6,28 @@ router = APIRouter()
 @router.post("/analyze")
 async def analyze_financials(payload: dict, x_api_key: str = Header(None)):
     """
-    Accepts parsed financial data (from PDF, CSV, Excel, etc.)
-    and uses GPT-5 + financial indicators to generate analysis.
+    Accepts parsed financial data (from PDF, CSV, Excel, or Word)
+    and performs AI-driven financial analysis using GPT-5 and
+    indicator computations to produce a summary report.
     """
     try:
-        # Perform the AI-driven analysis using helper function
+        # Perform AI + financial analysis
         result = analyze_data(payload)
 
-        # Return the structured AI analysis result
         return {
             "status": "success",
-            "message": "Analysis complete",
-            "result": result
+            "message": "AI analysis complete",
+            "result": result,
         }
 
     except ValueError as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid input data: {str(e)}"
+            detail=f"Invalid input data: {str(e)}",
         )
 
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"AI analysis failed: {str(e)}"
+            detail=f"AI analysis failed: {str(e)}",
         )
