@@ -31,18 +31,27 @@ def analyze_data(payload: dict):
         client = OpenAI(api_key=api_key)
         print(f"🔑 OpenAI key active (first 6 chars): {api_key[:6]}")
 
-        # 🧠 Compose AI prompt
+                # 🧠 Compose AI prompt
         prompt = f"""
-        You are an advanced AI financial analyst.
-        Analyze the following company's financial data and provide:
-        1. A concise executive summary
-        2. 2–3 key financial ratios or trends
-        3. A Credit Risk Score (0–100)
-        4. A brief reasoning behind the assigned score
+        You are a senior financial analyst preparing a professional report for a corporate client.
+        Use the data below to produce a concise, structured report with the following sections:
+
+        === Bravix AI Financial Analysis Report ===
+        1️⃣ Executive Summary — 4–6 sentences describing overall financial health.
+        2️⃣ Key Ratios & Indicators — bullet points showing important metrics, such as:
+            • Profit margin
+            • Debt-to-equity ratio
+            • Liquidity or solvency trend
+        3️⃣ Risk Evaluation — assign a Credit Risk Score (0–100), where higher = greater risk.
+            Explain briefly why this score was chosen.
+        4️⃣ AI Recommendations — 2–3 action points or strategic advice to improve stability.
+
+        Return your answer using **clear markdown formatting**, including headings (##) and bullet lists.
 
         Company Financial Data:
         {data_text}
         """
+
 
         # 💬 Send request to OpenAI API
         response = client.chat.completions.create(
