@@ -6,7 +6,7 @@ Includes graceful fallback, key sanitization, and detailed error logging for Ren
 import os
 import traceback
 from openai import OpenAI
-from openai.error import APIConnectionError, APIError, RateLimitError, Timeout
+from openai import APIConnectionError, APIError, RateLimitError, APITimeoutError
 
 def analyze_data(payload: dict):
     """
@@ -66,7 +66,7 @@ def analyze_data(payload: dict):
         }
 
     # 🛑 Specific error handling for better debugging on Render
-    except (APIConnectionError, Timeout) as e:
+    except (APIConnectionError, APITimeoutError) as e:
         print("⏱️ Network or timeout error during OpenAI request:", str(e))
         return {"error": "Connection timeout while contacting OpenAI API."}
 
