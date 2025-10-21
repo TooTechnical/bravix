@@ -9,33 +9,51 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // 🧠 Handles file upload + AI analysis
   async function handleAIAnalyze(e) {
     e.preventDefault();
-    if (!file) return setError("Please select a file first.");
+
+    if (!file) {
+      setError("Please select a file first.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    setResult(null);
 
     try {
+      // 1️⃣ Upload file to backend
       const uploadRes = await uploadFile(file);
-      const parsed = uploadRes.parsed_data;
 
+      // The backend returns { status, message, data }
+      const parsed = uploadRes.data || uploadRes.parsed_data || {};
+
+      if (!parsed || Object.keys(parsed).length === 0) {
+        throw new Error("Upload succeeded but no parsed data was returned.");
+      }
+
+      // 2️⃣ Analyze parsed data using AI
       const analyzeRes = await analyzeData(parsed, parsed.raw_text || "");
       setResult(analyzeRes);
     } catch (err) {
-      console.error(err);
-      setError(err.message || "Something went wrong.");
+      console.error("AI analysis error:", err);
+      setError(err.message || "Something went wrong during analysis.");
     } finally {
       setLoading(false);
     }
   }
 
-  // ✅ Safely extract text whether result.ai_analysis is a string or object
+  // ✅ Safely extract AI analysis text
   const aiText =
     typeof result?.ai_analysis === "string"
       ? result.ai_analysis
-      : result?.ai_analysis?.analysis_raw || "";
+      : result?.ai_analysis?.analysis_raw ||
+        result?.result?.summary ||
+        result?.result?.analysis ||
+        "";
 
-  // ✅ Extract Risk Score from text (if present)
+  // ✅ Extract risk score if present
   const riskMatch = aiText.match(/Risk Score.*?(\d+)/i);
   const riskValue = riskMatch ? parseInt(riskMatch[1], 10) : null;
 
@@ -45,7 +63,7 @@ export default function Dashboard() {
     return "#10b981"; // green
   }
 
-  // ✅ Generate PDF download
+  // 🧾 Generate downloadable PDF
   function handleDownloadReport() {
     const doc = new jsPDF({
       orientation: "portrait",
@@ -59,12 +77,12 @@ export default function Dashboard() {
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(12);
-    const splitText = doc.splitTextToSize(aiText, 520);
+    const splitText = doc.splitTextToSize(aiText || "No report data available.", 520);
     doc.text(splitText, 40, 90);
 
     if (riskValue !== null) {
       doc.setFont("helvetica", "bold");
-      doc.text(`\n\nRisk Score: ${riskValue}/100`, 40, doc.lastAutoTable ? doc.lastAutoTable.finalY + 30 : 700);
+      doc.text(`Risk Score: ${riskValue}/100`, 40, 750);
     }
 
     doc.save("Braivix-Financial-Report.pdf");
@@ -82,6 +100,7 @@ export default function Dashboard() {
         padding: "3rem 2rem",
       }}
     >
+      {/* 🔹 Header */}
       <header style={{ textAlign: "center", marginBottom: "2rem" }}>
         <h1
           style={{
@@ -106,6 +125,7 @@ export default function Dashboard() {
         </p>
       </header>
 
+      {/* 🔹 Upload Panel */}
       <section
         className="input-panel"
         style={{
@@ -176,6 +196,7 @@ export default function Dashboard() {
         )}
       </section>
 
+      {/* 🔹 Result Panel */}
       <section className="result-panel" style={{ width: "100%", maxWidth: "800px" }}>
         {loading && (
           <div
@@ -215,7 +236,7 @@ export default function Dashboard() {
 
             <ReactMarkdown>{aiText}</ReactMarkdown>
 
-            {/* ✅ Download Button */}
+            {/* Download Button */}
             <button
               onClick={handleDownloadReport}
               style={{
@@ -235,7 +256,7 @@ export default function Dashboard() {
               ⬇️ Download Report (PDF)
             </button>
 
-            {/* ✅ Risk Meter */}
+            {/* Risk Meter */}
             {riskValue !== null && (
               <div style={{ marginTop: "2rem" }}>
                 <strong>Risk Score: </strong>
@@ -272,6 +293,7 @@ export default function Dashboard() {
         )}
       </section>
 
+      {/* 🔹 Footer */}
       <footer
         style={{
           marginTop: "3rem",
@@ -279,7 +301,7 @@ export default function Dashboard() {
           color: "#6B7280",
         }}
       >
-        Prototype © Braivix — Powered by GPT-5
+        Prototype © Braivix Powered by GPT-5
       </footer>
     </div>
   );
