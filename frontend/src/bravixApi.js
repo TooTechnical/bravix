@@ -1,6 +1,11 @@
 // src/bravixApi.js
-const API_BASE = "http://127.0.0.1:8000/api"; // local backend
-const API_KEY = "BRAVIX-DEMO-SECURE-KEY-2025"; // must match backend key
+
+// 🔧 Dynamically use environment variable, fallback to local if not set
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : "http://127.0.0.1:8000/api";
+
+const API_KEY = import.meta.env.VITE_API_KEY || "BRAVIX-DEMO-SECURE-KEY-2025";
 
 // 📁 Upload file (PDF, CSV, XLSX, DOCX)
 export async function uploadFile(file) {
@@ -10,7 +15,7 @@ export async function uploadFile(file) {
   const res = await fetch(`${API_BASE}/upload`, {
     method: "POST",
     headers: {
-      "x-api-key": API_KEY
+      "x-api-key": API_KEY,
     },
     body: formData,
   });
