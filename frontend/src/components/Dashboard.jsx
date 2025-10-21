@@ -120,80 +120,81 @@ export default function Dashboard() {
 
       {/* 🔹 Upload Panel */}
       <section
-        className="input-panel"
-        style={{
-          background: "linear-gradient(180deg, #111827 0%, #1E293B 100%)",
-          padding: "2rem",
-          borderRadius: "14px",
-          boxShadow:
-            "0 0 25px rgba(0, 255, 208, 0.08), 0 0 60px rgba(0, 255, 208, 0.12)",
-          width: "100%",
-          maxWidth: "600px",
-          marginBottom: "2rem",
-          transition: "box-shadow 0.3s ease, transform 0.3s ease",
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.boxShadow =
-            "0 0 35px rgba(0, 255, 208, 0.15), 0 0 70px rgba(0, 255, 208, 0.2)")
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.boxShadow =
-            "0 0 25px rgba(0, 255, 208, 0.08), 0 0 60px rgba(0, 255, 208, 0.12)")
-        }
-      >
-        <form onSubmit={handleAIAnalyze} style={{ textAlign: "center" }}>
-          <label
-            style={{
-              display: "block",
-              fontWeight: "600",
-              color: "#E5E7EB",
-              marginBottom: "0.5rem",
-            }}
-          >
-            Upload Financial Document (PDF, CSV, Excel, Word)
-          </label>
-          <input
-            type="file"
-            accept=".pdf,.csv,.xls,.xlsx,.doc,.docx"
-            onChange={(e) => setFile(e.target.files[0])}
-            style={{
-              display: "block",
-              margin: "0 auto 1rem",
-              padding: "0.6rem",
-              width: "100%",
-              border: "1px solid #374151",
-              borderRadius: "8px",
-              backgroundColor: "#0F172A",
-              color: "#E5E7EB",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              background: "linear-gradient(90deg, #00C48C 0%, #00FFD0 100%)",
-              color: "#fff",
-              fontWeight: "600",
-              padding: "12px 36px",
-              borderRadius: "10px",
-              border: "none",
-              cursor: "pointer",
-              transition: "transform 0.2s ease, box-shadow 0.2s ease",
-              width: "100%",
-            }}
-            onMouseEnter={(e) => (e.target.style.transform = "translateY(-3px)")}
-            onMouseLeave={(e) => (e.target.style.transform = "translateY(0)")}
-          >
-            {loading ? "Analyzing with AI..." : "Upload & Analyze with AI"}
-          </button>
-        </form>
+  className="input-panel"
+  style={{
+    background: "linear-gradient(180deg, #111827 0%, #0F172A 100%)",
+    padding: "2rem",
+    borderRadius: "20px",
+    boxShadow: "0 10px 40px rgba(0, 0, 0, 0.4)",
+    width: "100%",
+    maxWidth: "600px",
+    marginBottom: "2rem",
+    color: "#E5E7EB",
+  }}
+>
+  <form onSubmit={handleAIAnalyze} style={{ textAlign: "center" }}>
+    <label
+      style={{
+        display: "block",
+        fontWeight: "600",
+        color: "#9CA3AF",
+        marginBottom: "0.75rem",
+        fontSize: "1.05rem",
+      }}
+    >
+      Upload Financial Document (PDF, CSV, Excel, Word)
+    </label>
 
-        {error && (
-          <div style={{ color: "red", marginTop: "1rem", fontWeight: "500" }}>
-            {error}
-          </div>
-        )}
-      </section>
+    <input
+      type="file"
+      accept=".pdf,.csv,.xls,.xlsx,.doc,.docx"
+      onChange={(e) => setFile(e.target.files[0])}
+      style={{
+        display: "block",
+        margin: "0 auto 1rem",
+        padding: "0.75rem",
+        width: "100%",
+        border: "1px solid #1E293B",
+        borderRadius: "10px",
+        backgroundColor: "#0F172A",
+        color: "#F9FAFB",
+      }}
+    />
+
+    <button
+      type="submit"
+      disabled={loading}
+      style={{
+        background: "linear-gradient(90deg, #00C48C 0%, #00FFD0 100%)",
+        color: "#0F172A",
+        fontWeight: "700",
+        padding: "14px 36px",
+        borderRadius: "12px",
+        border: "none",
+        cursor: "pointer",
+        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        width: "100%",
+      }}
+      onMouseEnter={(e) => (e.target.style.transform = "translateY(-3px)")}
+      onMouseLeave={(e) => (e.target.style.transform = "translateY(0)")}
+    >
+      {loading ? "Analyzing with AI..." : "Upload & Analyze with AI"}
+    </button>
+  </form>
+
+  {error && (
+    <div
+      style={{
+        color: "#F87171",
+        marginTop: "1rem",
+        fontWeight: "500",
+      }}
+    >
+      {error}
+    </div>
+  )}
+</section>
+
 
       {/* 🔹 Result Panel */}
       <section className="result-panel" style={{ width: "100%", maxWidth: "800px" }}>
