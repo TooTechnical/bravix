@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Request, Header, HTTPException, Depends, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.cors import CORSMiddleware as StarletteCORSMiddleware
 from app.routes import financial_analysis, upload, analyze
 from dotenv import load_dotenv
 
@@ -19,10 +18,9 @@ app = FastAPI(
 )
 
 # -------------------------------------------------
-# 3️⃣ Dynamic CORS configuration
+# 3️⃣ CORS Configuration (Dynamic + Static)
 # -------------------------------------------------
-# Explicitly allowed main domains
-BASE_ALLOWED_ORIGINS = [
+STATIC_ALLOWED_ORIGINS = [
     "https://bravix-ai.vercel.app",
     "https://bravix-pi.vercel.app",
     "https://bravix.vercel.app",
@@ -30,21 +28,46 @@ BASE_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
 
-# Allow any *.vercel.app preview build
-def is_vercel_origin(origin: str) -> bool:
-    return origin and origin.endswith(".vercel.app")
+def is_allowed_origin(origin: str) -> bool:
+    """Allow dynamic Vercel previews automatically."""
+    if not origin:
+        return False
+    if origin.endswith(".vercel.app"):
+        return True
+    return origin in STATIC_ALLOWED_ORIGINS
 
-class DynamicCORSMiddleware(CORSMiddleware):
-    async def simple_response(self, request, response):
+@app.middleware("http")
+async def dynamic_cors_middleware(request: Request, call_next):
+    """
+    Dynamically attach CORS headers so OPTIONS never fails
+    even before reaching the route logic.
+    """
+    # Handle preflight requests immediately
+    if request.method == "OPTIONS":
         origin = request.headers.get("origin")
-        if origin and (origin in BASE_ALLOWED_ORIGINS or is_vercel_origin(origin)):
+        from fastapi.responses import Response
+        response = Response()
+        if origin and is_allowed_origin(origin):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
-        return await super().simple_response(request, response)
+            response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Authorization, Content-Type, X-API-Key, x-api-key"
+            )
+        return response
 
+    # For normal requests
+    response = await call_next(request)
+    origin = request.headers.get("origin")
+    if origin and is_allowed_origin(origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+# Add base middleware for safety — ensures CORS always passes through
 app.add_middleware(
-    DynamicCORSMiddleware,
-    allow_origins=["*"],  # needed so OPTIONS preflights don't fail
+    CORSMiddleware,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -112,10 +135,9 @@ def root():
 @app.get("/debug-cors")
 async def debug_cors(request: Request):
     origin = request.headers.get("origin")
-    allowed = BASE_ALLOWED_ORIGINS + ["*.vercel.app"]
     return {
         "your_origin_header": origin,
-        "allowed_origins": allowed,
+        "allowed_origins": STATIC_ALLOWED_ORIGINS + ["*.vercel.app"],
         "message": "Dynamic CORS and API key system active",
     }
 
