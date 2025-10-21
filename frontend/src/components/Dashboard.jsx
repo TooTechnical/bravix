@@ -95,12 +95,13 @@ export default function Dashboard() {
     <div
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(180deg, #F9FAFB 0%, #EEF2F3 100%)",
+        background: "linear-gradient(180deg, #0F172A 0%, #1E293B 100%)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         fontFamily: "'Inter', sans-serif",
         padding: "3rem 2rem",
+        color: "white",
       }}
     >
       {/* 🔹 Header */}
@@ -109,7 +110,8 @@ export default function Dashboard() {
           style={{
             fontSize: "2.5rem",
             fontWeight: "700",
-            color: "#111827",
+            color: "#00FFD0",
+            textShadow: "0 0 10px rgba(0, 255, 208, 0.5)",
             marginBottom: "0.5rem",
           }}
         >
@@ -117,7 +119,7 @@ export default function Dashboard() {
         </h1>
         <p
           style={{
-            color: "#4B5563",
+            color: "#9CA3AF",
             fontSize: "1.1rem",
             maxWidth: "600px",
             margin: "0 auto",
@@ -132,10 +134,10 @@ export default function Dashboard() {
       <section
         className="input-panel"
         style={{
-          background: "#fff",
+          background: "#1E293B",
           padding: "2rem",
           borderRadius: "12px",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+          boxShadow: "0 0 20px rgba(0, 255, 208, 0.08)",
           width: "100%",
           maxWidth: "600px",
           marginBottom: "2rem",
@@ -146,7 +148,7 @@ export default function Dashboard() {
             style={{
               display: "block",
               fontWeight: "600",
-              color: "#374151",
+              color: "#E5E7EB",
               marginBottom: "0.5rem",
             }}
           >
@@ -161,8 +163,10 @@ export default function Dashboard() {
               margin: "0 auto 1rem",
               padding: "0.5rem",
               width: "100%",
-              border: "1px solid #D1D5DB",
+              border: "1px solid #374151",
               borderRadius: "8px",
+              backgroundColor: "#111827",
+              color: "#E5E7EB",
             }}
           />
           <button
@@ -206,7 +210,7 @@ export default function Dashboard() {
             style={{
               textAlign: "center",
               fontWeight: "600",
-              color: "#2563EB",
+              color: "#00FFD0",
               marginTop: "1rem",
             }}
           >
@@ -217,21 +221,32 @@ export default function Dashboard() {
         {aiText && (
           <div
             style={{
-              background: "#0F172A",
+              background: "linear-gradient(180deg, #0F172A 0%, #1E293B 100%)",
               color: "white",
               padding: "2rem",
-              borderRadius: "14px",
-              boxShadow: "0 6px 30px rgba(0, 0, 0, 0.3)",
+              borderRadius: "16px",
+              boxShadow:
+                "0 0 25px rgba(0, 255, 208, 0.08), 0 0 60px rgba(0, 255, 208, 0.12), 0 10px 30px rgba(0,0,0,0.5)",
               lineHeight: "1.7",
               whiteSpace: "pre-wrap",
               position: "relative",
+              transition: "transform 0.3s ease, box-shadow 0.3s ease",
             }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.boxShadow =
+                "0 0 35px rgba(0, 255, 208, 0.15), 0 0 70px rgba(0, 255, 208, 0.2), 0 10px 30px rgba(0,0,0,0.6)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.boxShadow =
+                "0 0 25px rgba(0, 255, 208, 0.08), 0 0 60px rgba(0, 255, 208, 0.12), 0 10px 30px rgba(0,0,0,0.5)")
+            }
           >
             <h3
               style={{
                 color: "#00FFD0",
                 marginBottom: "1rem",
                 fontSize: "1.5rem",
+                textShadow: "0 0 8px rgba(0, 255, 208, 0.5)",
               }}
             >
               AI Financial Report
@@ -256,7 +271,7 @@ export default function Dashboard() {
               onMouseEnter={(e) => (e.target.style.transform = "translateY(-2px)")}
               onMouseLeave={(e) => (e.target.style.transform = "translateY(0)")}
             >
-              Download Report (PDF)
+              ⬇️ Download Report (PDF)
             </button>
 
             {/* Risk Meter */}
@@ -301,7 +316,7 @@ export default function Dashboard() {
         style={{
           marginTop: "3rem",
           fontSize: "0.9rem",
-          color: "#6B7280",
+          color: "#9CA3AF",
         }}
       >
         Prototype © Braivix Powered by GPT-5
