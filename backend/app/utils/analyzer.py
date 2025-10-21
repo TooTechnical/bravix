@@ -37,14 +37,14 @@ def analyze_data(payload: dict):
         Use the data below to produce a concise, structured report with the following sections:
 
         === Bravix AI Financial Analysis Report ===
-        1️⃣ Executive Summary — 4–6 sentences describing overall financial health.
-        2️⃣ Key Ratios & Indicators — bullet points showing important metrics, such as:
+        1️ Executive Summary — 4–6 sentences describing overall financial health.
+        2️ Key Ratios & Indicators — bullet points showing important metrics, such as:
             • Profit margin
             • Debt-to-equity ratio
             • Liquidity or solvency trend
-        3️⃣ Risk Evaluation — assign a Credit Risk Score (0–100), where higher = greater risk.
+        3️ Risk Evaluation — assign a Credit Risk Score (0–100), where higher = greater risk.
             Explain briefly why this score was chosen.
-        4️⃣ AI Recommendations — 2–3 action points or strategic advice to improve stability.
+        4️ AI Recommendations — 2-3 action points or strategic advice to improve stability.
 
         Return your answer using **clear markdown formatting**, including headings (##) and bullet lists.
 
