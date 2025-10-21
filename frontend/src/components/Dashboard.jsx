@@ -12,6 +12,7 @@ export default function Dashboard() {
   // 🧠 Handles file upload + AI analysis
   async function handleAIAnalyze(e) {
     e.preventDefault();
+
     if (!file) {
       setError("Please select a file first.");
       return;
@@ -22,13 +23,17 @@ export default function Dashboard() {
     setResult(null);
 
     try {
+      // 1️⃣ Upload file to backend
       const uploadRes = await uploadFile(file);
+
+      // The backend returns { status, message, data }
       const parsed = uploadRes.data || uploadRes.parsed_data || {};
 
       if (!parsed || Object.keys(parsed).length === 0) {
         throw new Error("Upload succeeded but no parsed data was returned.");
       }
 
+      // 2️⃣ Analyze parsed data using AI
       const analyzeRes = await analyzeData(parsed, parsed.raw_text || "");
       setResult(analyzeRes);
     } catch (err) {
@@ -39,7 +44,7 @@ export default function Dashboard() {
     }
   }
 
-  // ✅ Extract AI analysis text
+  // ✅ Safely extract AI analysis text
   const aiText =
     typeof result?.ai_analysis === "string"
       ? result.ai_analysis
@@ -48,8 +53,8 @@ export default function Dashboard() {
         result?.result?.analysis ||
         "";
 
-  // ✅ Extract Risk Score
-  const riskMatch = aiText.match(/(\b\d{1,3})\/?100/i);
+  // ✅ Extract risk score if present
+  const riskMatch = aiText.match(/Risk Score.*?(\d+)/i);
   const riskValue = riskMatch ? parseInt(riskMatch[1], 10) : null;
 
   function getRiskColor(score) {
@@ -58,16 +63,24 @@ export default function Dashboard() {
     return "#10b981"; // green
   }
 
-  // 🧾 PDF Generator
+  // 🧾 Generate downloadable PDF
   function handleDownloadReport() {
-    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "pt",
+      format: "a4",
+    });
+
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
-    doc.text("Bravix AI Financial Risk Report", 40, 50);
+    doc.text("Braivix AI Financial Risk Report", 40, 50);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(12);
-    const splitText = doc.splitTextToSize(aiText || "No report data available.", 520);
+    const splitText = doc.splitTextToSize(
+      aiText || "No report data available.",
+      520
+    );
     doc.text(splitText, 40, 90);
 
     if (riskValue !== null) {
@@ -75,7 +88,7 @@ export default function Dashboard() {
       doc.text(`Risk Score: ${riskValue}/100`, 40, 750);
     }
 
-    doc.save("Bravix-Financial-Report.pdf");
+    doc.save("Braivix-Financial-Report.pdf");
   }
 
   return (
@@ -90,10 +103,17 @@ export default function Dashboard() {
         padding: "3rem 2rem",
       }}
     >
-      {/* Header */}
+      {/* 🔹 Header */}
       <header style={{ textAlign: "center", marginBottom: "2rem" }}>
-        <h1 style={{ fontSize: "2.5rem", fontWeight: "700", color: "#111827" }}>
-          Bravix AI Financial Analyzer
+        <h1
+          style={{
+            fontSize: "2.5rem",
+            fontWeight: "700",
+            color: "#111827",
+            marginBottom: "0.5rem",
+          }}
+        >
+          Braivix AI Financial Analyzer
         </h1>
         <p
           style={{
@@ -108,8 +128,9 @@ export default function Dashboard() {
         </p>
       </header>
 
-      {/* Upload Panel */}
+      {/* 🔹 Upload Panel */}
       <section
+        className="input-panel"
         style={{
           background: "#fff",
           padding: "2rem",
@@ -155,18 +176,31 @@ export default function Dashboard() {
               borderRadius: "10px",
               border: "none",
               cursor: "pointer",
+              transition: "transform 0.2s ease, box-shadow 0.2s ease",
               width: "100%",
             }}
+            onMouseEnter={(e) => (e.target.style.transform = "translateY(-3px)")}
+            onMouseLeave={(e) => (e.target.style.transform = "translateY(0)")}
           >
             {loading ? "Analyzing with AI..." : "Upload & Analyze with AI"}
           </button>
         </form>
 
-        {error && <div style={{ color: "red", marginTop: "1rem" }}>{error}</div>}
+        {error && (
+          <div
+            style={{
+              color: "red",
+              marginTop: "1rem",
+              fontWeight: "500",
+            }}
+          >
+            {error}
+          </div>
+        )}
       </section>
 
-      {/* Result Panel */}
-      <section style={{ width: "100%", maxWidth: "800px" }}>
+      {/* 🔹 Result Panel */}
+      <section className="result-panel" style={{ width: "100%", maxWidth: "800px" }}>
         {loading && (
           <div
             style={{
@@ -183,148 +217,86 @@ export default function Dashboard() {
         {aiText && (
           <div
             style={{
-              background: "#ffffff",
-              color: "#1e293b",
-              padding: "2.5rem",
+              background: "#0F172A",
+              color: "white",
+              padding: "2rem",
               borderRadius: "14px",
-              boxShadow: "0 10px 40px rgba(0,0,0,0.08)",
-              lineHeight: "1.8",
+              boxShadow: "0 6px 30px rgba(0, 0, 0, 0.3)",
+              lineHeight: "1.7",
+              whiteSpace: "pre-wrap",
               position: "relative",
-              maxWidth: "800px",
-              margin: "0 auto",
             }}
           >
-            <h2
+            <h3
               style={{
-                color: "#00C48C",
+                color: "#00FFD0",
                 marginBottom: "1rem",
-                fontWeight: 700,
+                fontSize: "1.5rem",
               }}
             >
-              Bravix AI Financial Risk Report
-            </h2>
+              AI Financial Report
+            </h3>
 
-            <ReactMarkdown
-              components={{
-                h2: ({ node, ...props }) => (
-                  <h3
-                    style={{
-                      color: "#111827",
-                      marginTop: "1.2rem",
-                      borderBottom: "1px solid #e5e7eb",
-                      paddingBottom: "0.4rem",
-                    }}
-                    {...props}
-                  />
-                ),
-                li: ({ node, ...props }) => (
-                  <li
-                    style={{
-                      marginLeft: "1.5rem",
-                      marginBottom: "0.3rem",
-                    }}
-                    {...props}
-                  />
-                ),
+            <ReactMarkdown>{aiText}</ReactMarkdown>
+
+            {/* Download Button */}
+            <button
+              onClick={handleDownloadReport}
+              style={{
+                background: "linear-gradient(90deg, #00C48C 0%, #00FFD0 100%)",
+                color: "#fff",
+                fontWeight: "600",
+                padding: "10px 24px",
+                borderRadius: "8px",
+                border: "none",
+                cursor: "pointer",
+                marginTop: "1.5rem",
+                transition: "transform 0.2s ease",
               }}
+              onMouseEnter={(e) => (e.target.style.transform = "translateY(-2px)")}
+              onMouseLeave={(e) => (e.target.style.transform = "translateY(0)")}
             >
-              {aiText}
-            </ReactMarkdown>
+              Download Report (PDF)
+            </button>
 
-            {/* 🟩 Risk Score Bar */}
+            {/* Risk Meter */}
             {riskValue !== null && (
               <div style={{ marginTop: "2rem" }}>
-                <h4
+                <strong>Risk Score: </strong>
+                <span
                   style={{
-                    fontWeight: "600",
-                    color: "#334155",
-                    marginBottom: "0.5rem",
+                    fontWeight: "bold",
+                    color: getRiskColor(riskValue),
                   }}
                 >
-                  Credit Risk Score:{" "}
-                  <span
-                    style={{
-                      color: getRiskColor(riskValue),
-                      fontWeight: "700",
-                    }}
-                  >
-                    {riskValue}/100
-                  </span>
-                </h4>
-
+                  {riskValue}/100
+                </span>
                 <div
                   style={{
                     width: "100%",
-                    height: "16px",
-                    background:
-                      "linear-gradient(90deg, #10b981 0%, #f59e0b 60%, #dc2626 100%)",
-                    borderRadius: "8px",
-                    overflow: "hidden",
-                    boxShadow: "inset 0 0 4px rgba(0,0,0,0.2)",
+                    height: "10px",
+                    background: "#1E293B",
+                    borderRadius: "5px",
+                    marginTop: "8px",
                   }}
                 >
                   <div
                     style={{
                       width: `${riskValue}%`,
                       height: "100%",
-                      background: "rgba(255,255,255,0.8)",
-                      transition: "width 0.8s ease-in-out",
+                      background: getRiskColor(riskValue),
+                      borderRadius: "5px",
+                      transition: "width 0.5s ease",
                     }}
                   />
                 </div>
-
-                <p
-                  style={{
-                    fontSize: "0.9rem",
-                    color: "#64748b",
-                    marginTop: "0.5rem",
-                    textAlign: "right",
-                  }}
-                >
-                  {riskValue <= 40
-                    ? "🟢 Low Risk — Stable financials"
-                    : riskValue <= 69
-                    ? "🟠 Moderate Risk — Some caution advised"
-                    : "🔴 High Risk — Review debt exposure"}
-                </p>
               </div>
             )}
-
-            {/* Download Button */}
-            <div style={{ marginTop: "2rem", textAlign: "right" }}>
-              <button
-                onClick={handleDownloadReport}
-                style={{
-                  background:
-                    "linear-gradient(90deg, #00C48C 0%, #00FFD0 100%)",
-                  color: "#fff",
-                  fontWeight: "600",
-                  padding: "10px 24px",
-                  borderRadius: "8px",
-                  border: "none",
-                  cursor: "pointer",
-                  transition: "transform 0.2s ease",
-                }}
-                onMouseEnter={(e) =>
-                  (e.target.style.transform = "translateY(-2px)")
-                }
-                onMouseLeave={(e) =>
-                  (e.target.style.transform = "translateY(0)")
-                }
-              >
-                ⬇️ Download Report (PDF)
-              </button>
-            </div>
-
-            <div style={{ marginTop: "1.5rem", textAlign: "right" }}>
-              <em style={{ color: "#64748b" }}>
-                Generated by GPT-5 (Bravix AI Engine)
-              </em>
-            </div>
           </div>
         )}
       </section>
 
+      {/* 🔹 Footer */}
       <footer
         style={{
           marginTop: "3rem",
@@ -332,7 +304,7 @@ export default function Dashboard() {
           color: "#6B7280",
         }}
       >
-        Prototype © Bravix Powered by GPT-5
+        Prototype © Braivix Powered by GPT-5
       </footer>
     </div>
   );
