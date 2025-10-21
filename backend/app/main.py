@@ -18,38 +18,40 @@ app = FastAPI(
 )
 
 # -------------------------------------------------
-# 3️⃣ CORS configuration (Restricted + Local Dev)
+# 3️⃣ CORS configuration (allow all temporarily for testing)
 # -------------------------------------------------
+# ⚠️ While debugging CORS in Render/Vercel, it's best to allow all origins.
+# Once confirmed working, replace ["*"] with your explicit domains.
 ALLOWED_ORIGINS = [
-    "https://bravix-ai.vercel.app",     # main website
-    "https://bravix-pi.vercel.app",     # AI Analyzer frontend
-    "https://bravix.vercel.app",        # backup domain if used
-    "http://localhost:5173",            # local dev (Vite)
-    "http://localhost:3000",            # local dev (React)
+    "https://bravix-ai.vercel.app",
+    "https://bravix-pi.vercel.app",
+    "https://bravix.vercel.app",
+    "https://bravix-bsjlvikyb-tootechnicals-projects.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=ALLOWED_ORIGINS or ["*"],  # fallback for safety
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # include OPTIONS automatically
+    allow_headers=["*"],  # includes Content-Type, x-api-key, etc.
 )
 
 # -------------------------------------------------
-# 4️⃣ Simple API Key Security Layer
+# 4️⃣ API Key Security
 # -------------------------------------------------
-API_KEY = "BRAVIX-DEMO-SECURE-KEY-2025"  # 🔐 Change before production
+API_KEY = "BRAVIX-DEMO-SECURE-KEY-2025"
 
 async def verify_api_key(x_api_key: str = Header(None)):
-    """Ensures that every request includes the correct API key header."""
+    """Ensures each request includes the correct API key."""
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid or missing API Key")
 
 # -------------------------------------------------
-# 5️⃣ Include Routers (Financial + AI + Upload)
+# 5️⃣ Include Routers (Financial + Upload + Analyze)
 # -------------------------------------------------
-# Financial analysis routes
 app.include_router(
     financial_analysis.router,
     prefix="/api/financial",
@@ -57,7 +59,6 @@ app.include_router(
     dependencies=[Depends(verify_api_key)],
 )
 
-# Upload routes
 app.include_router(
     upload.router,
     prefix="/api",
@@ -65,7 +66,6 @@ app.include_router(
     dependencies=[Depends(verify_api_key)],
 )
 
-# AI analysis routes
 app.include_router(
     analyze.router,
     prefix="/api",
@@ -74,23 +74,25 @@ app.include_router(
 )
 
 # -------------------------------------------------
-# 6️⃣ Alias route (for old frontend endpoint)
+# 6️⃣ Alias route (for backward compatibility)
 # -------------------------------------------------
 alias_router = APIRouter()
 
 @alias_router.post("/api/financial-analysis")
 async def alias_financial_analysis(payload: dict, x_api_key: str = Header(None)):
     """
-    Temporary alias endpoint for backward compatibility with old frontend.
-    Redirects to the main /api/financial/analysis route.
+    Redirects /api/financial-analysis requests to /api/financial/financial-analysis.
     """
-    from app.routes.financial_analysis import analyze_financial_data
-    return await analyze_financial_data(payload)
+    try:
+        from app.routes.financial_analysis import financial_analysis
+        return await financial_analysis(payload)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Alias route failed: {str(e)}")
 
 app.include_router(alias_router)
 
 # -------------------------------------------------
-# 7️⃣ Root & Utility Endpoints
+# 7️⃣ Utility & Health Check Endpoints
 # -------------------------------------------------
 @app.get("/")
 def root():
@@ -107,4 +109,4 @@ async def debug_cors(request: Request):
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "service": "Bravix.Ai backend healthy"}
+    return {"status": "ok", "service": "Bravix.AI backend healthy"}
