@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, Header, HTTPException, Depends, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.cors import CORSMiddleware as StarletteCORSMiddleware
 from app.routes import financial_analysis, upload, analyze
 from dotenv import load_dotenv
 
@@ -13,30 +14,40 @@ load_dotenv()
 # -------------------------------------------------
 app = FastAPI(
     title="Bravix API",
-    version="1.3",
+    version="1.4",
     description="Secure backend for Bravix Financial Analysis & AI Demo",
 )
 
 # -------------------------------------------------
-# 3️⃣ CORS configuration (allow all temporarily for testing)
+# 3️⃣ Dynamic CORS configuration
 # -------------------------------------------------
-# ⚠️ While debugging CORS in Render/Vercel, it's best to allow all origins.
-# Once confirmed working, replace ["*"] with your explicit domains.
-ALLOWED_ORIGINS = [
+# Explicitly allowed main domains
+BASE_ALLOWED_ORIGINS = [
     "https://bravix-ai.vercel.app",
     "https://bravix-pi.vercel.app",
     "https://bravix.vercel.app",
-    "https://bravix-bsjlvikyb-tootechnicals-projects.vercel.app",
     "http://localhost:5173",
     "http://localhost:3000",
 ]
 
+# Allow any *.vercel.app preview build
+def is_vercel_origin(origin: str) -> bool:
+    return origin and origin.endswith(".vercel.app")
+
+class DynamicCORSMiddleware(CORSMiddleware):
+    async def simple_response(self, request, response):
+        origin = request.headers.get("origin")
+        if origin and (origin in BASE_ALLOWED_ORIGINS or is_vercel_origin(origin)):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        return await super().simple_response(request, response)
+
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS or ["*"],  # fallback for safety
+    DynamicCORSMiddleware,
+    allow_origins=["*"],  # needed so OPTIONS preflights don't fail
     allow_credentials=True,
-    allow_methods=["*"],  # include OPTIONS automatically
-    allow_headers=["*"],  # includes Content-Type, x-api-key, etc.
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # -------------------------------------------------
@@ -96,15 +107,16 @@ app.include_router(alias_router)
 # -------------------------------------------------
 @app.get("/")
 def root():
-    return {"message": "Bravix Demo API running (CORS + API Key Secured)"}
+    return {"message": "Bravix Demo API running (Dynamic CORS + API Key Secured)"}
 
 @app.get("/debug-cors")
 async def debug_cors(request: Request):
     origin = request.headers.get("origin")
+    allowed = BASE_ALLOWED_ORIGINS + ["*.vercel.app"]
     return {
         "your_origin_header": origin,
-        "allowed_origins": ALLOWED_ORIGINS,
-        "message": "CORS and API key system active",
+        "allowed_origins": allowed,
+        "message": "Dynamic CORS and API key system active",
     }
 
 @app.get("/health")
