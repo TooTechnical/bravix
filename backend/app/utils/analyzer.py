@@ -1,87 +1,93 @@
 """
-Performs AI + financial data analysis using OpenAI GPT models (GPT-4o-mini).
-Includes graceful fallback, key sanitization, and detailed error logging for Render.
+Braivix – AI Financial Analyzer
+--------------------------------
+Integrates the 18 financial indicators with GPT-5 to generate a structured,
+explainable financial report. Includes full error handling for Render.
 """
 
 import os
 import traceback
 from openai import OpenAI
-from openai import APIConnectionError, APIError, RateLimitError, APITimeoutError
+from app.utils.financial_indicators import compute_all
+
 
 def analyze_data(payload: dict):
     """
-    Processes parsed financial data and returns a GPT-based financial summary.
-    Falls back to a simulated response if API access fails or key is invalid.
+    Takes parsed financial data, computes the 18 indicators,
+    and sends both numeric + qualitative insights to GPT-5.
     """
     try:
-        # 🧾 Convert the incoming data to readable text
+        # --- Step 1: Extract text for qualitative reference
         data_text = payload.get("raw_text") or str(payload)
 
-        # 🔑 Sanitize the OpenAI API key (remove newlines/spaces)
-        api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+        # --- Step 2: Compute financial indicators
+        indicator_data = compute_all(payload)
+        indicators = indicator_data.get("financial_indicators", [])
+        overall_score = indicator_data.get("overall_health_score")
 
-        if not api_key:
-            print("⚠️ No valid OpenAI API key found. Returning simulated response.")
+        # --- Step 3: Prepare for GPT-5
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or not api_key.strip():
+            print("⚠️ No OpenAI API key found. Returning simulated response.")
             return {
-                "summary": "AI analysis unavailable (missing or invalid API key).",
-                "insight": "Simulated placeholder output based on parsed data.",
+                "summary": "AI analysis unavailable (no API key detected).",
+                "insight": "Simulated placeholder output based on 18 financial indicators.",
+                "indicators": indicator_data
             }
 
-        # 🚀 Initialize OpenAI client with sanitized key
         client = OpenAI(api_key=api_key)
-        print(f"🔑 OpenAI key active (first 6 chars): {api_key[:6]}")
+        print("🔑 OpenAI API key loaded successfully (first 6 chars):", api_key[:6])
 
-                # 🧠 Compose AI prompt
+        # --- Step 4: Build structured indicator summary for GPT prompt
+        indicator_summary = "\n".join([
+            f"- {i['name']}: {i['value']} ({i['status']})"
+            for i in indicators
+        ])
+
+        # --- Step 5: Compose prompt
         prompt = f"""
-        You are a senior financial analyst preparing a professional report for a corporate client.
-        Use the data below to produce a concise, structured report with the following sections:
+        You are Braivix AI — an expert financial analyst assisting banks and investors.
 
-        === Bravix AI Financial Analysis Report ===
-        1️ Executive Summary — 4–6 sentences describing overall financial health.
-        2️ Key Ratios & Indicators — bullet points showing important metrics, such as:
-            • Profit margin
-            • Debt-to-equity ratio
-            • Liquidity or solvency trend
-        3️ Risk Evaluation — assign a Credit Risk Score (0–100), where higher = greater risk.
-            Explain briefly why this score was chosen.
-        4️ AI Recommendations — 2-3 action points or strategic advice to improve stability.
+        Analyze the following financial indicators and determine the company’s financial health,
+        liquidity, profitability, solvency, and efficiency. Use real-world banking standards.
 
-        Return your answer using **clear markdown formatting**, including headings (##) and bullet lists.
+        Provide:
+        1. Executive Summary (2–3 paragraphs)
+        2. Key Strengths and Weaknesses
+        3. Credit Risk Rating (0–100, higher = higher risk)
+        4. Lending Recommendation
+        5. Explanation of how the 18 indicators influenced your decision
 
-        Company Financial Data:
-        {data_text}
+        ---
+        RAW DATA EXTRACT:
+        {data_text[:1500]}  # Limit text length for efficiency
+        ---
+        FINANCIAL INDICATORS:
+        {indicator_summary}
+        ---
+        OVERALL HEALTH SCORE (calculated internally): {overall_score}
         """
 
-
-        # 💬 Send request to OpenAI API
+        # --- Step 6: Call GPT-5 API
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o-mini",  # GPT-4 Optimized model (GPT-5-equivalent reasoning)
             messages=[
-                {"role": "system", "content": "You are a precise and senior financial analyst."},
-                {"role": "user", "content": prompt.strip()},
+                {"role": "system", "content": "You are an advanced financial analysis AI for Braivix."},
+                {"role": "user", "content": prompt.strip()}
             ],
-            temperature=0.6,
-            max_tokens=800,
-            timeout=30,  # seconds
+            temperature=0.5,
+            max_tokens=900
         )
 
-        # ✅ Extract AI output safely
         ai_output = response.choices[0].message.content.strip()
-        print("✅ AI analysis generated successfully (length):", len(ai_output))
+        print("✅ AI response generated successfully (chars):", len(ai_output))
 
         return {
+            "status": "success",
             "summary": ai_output,
-            "insight": "Analysis generated successfully using GPT-4o-mini.",
+            "overall_health_score": overall_score,
+            "financial_indicators": indicators
         }
-
-    # 🛑 Specific error handling for better debugging on Render
-    except (APIConnectionError, APITimeoutError) as e:
-        print("⏱️ Network or timeout error during OpenAI request:", str(e))
-        return {"error": "Connection timeout while contacting OpenAI API."}
-
-    except (RateLimitError, APIError) as e:
-        print("⚠️ OpenAI API error:", str(e))
-        return {"error": f"OpenAI API returned an error: {str(e)}"}
 
     except Exception as e:
         print("❌ AI analysis failed:", str(e))

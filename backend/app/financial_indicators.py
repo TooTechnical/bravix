@@ -1,7 +1,8 @@
 """
-Bravix – Financial Indicators Module (Safe Version)
----------------------------------------------------
-Handles missing or None data gracefully so the API never crashes.
+Braivix – 18-Indicator Financial Health Engine
+----------------------------------------------
+Computes liquidity, profitability, solvency, and efficiency metrics.
+Adds weighted scoring and AI-ready output for GPT-5 analysis.
 """
 
 from typing import Dict, Any, Optional
@@ -15,12 +16,12 @@ def safe_num(x):
 
 
 def safe_div(a, b):
-    """Safely divide two numbers."""
+    """Safely divide two numbers, returning None if invalid."""
     a, b = safe_num(a), safe_num(b)
-    return round(a / b, 4) if b != 0 else None
+    return round(a / b, 4) if b not in (0, None) else None
 
 
-# ---------- Ratio Functions ----------
+# ---------- Indicator Functions ----------
 
 def current_liquidity_ratio(current_assets, current_liabilities):
     return safe_div(current_assets, current_liabilities)
@@ -45,30 +46,30 @@ def dso(receivables_turnover_ratio):
 
 def net_profit_margin(net_profit, revenue):
     val = safe_div(net_profit, revenue)
-    return val * 100 if val is not None else None
+    return round(val * 100, 2) if val is not None else None
 
 def roa(net_profit, avg_assets):
     val = safe_div(net_profit, avg_assets)
-    return val * 100 if val is not None else None
+    return round(val * 100, 2) if val is not None else None
 
 def roe(net_profit, avg_equity):
     val = safe_div(net_profit, avg_equity)
-    return val * 100 if val is not None else None
+    return round(val * 100, 2) if val is not None else None
 
 def equity_ratio(equity, total_capital):
     val = safe_div(equity, total_capital)
-    return val * 100 if val is not None else None
+    return round(val * 100, 2) if val is not None else None
 
 def dti(total_liabilities, total_income):
     val = safe_div(total_liabilities, total_income)
-    return val * 100 if val is not None else None
+    return round(val * 100, 2) if val is not None else None
 
 def dscr_monthly(monthly_income, monthly_debt_payments):
     return safe_div(monthly_income, monthly_debt_payments)
 
 def roi(profit_from_investment, investment_cost):
     val = safe_div(safe_num(profit_from_investment) - safe_num(investment_cost), investment_cost)
-    return val * 100 if val is not None else None
+    return round(val * 100, 2) if val is not None else None
 
 def working_capital(current_assets, current_liabilities):
     return safe_num(current_assets) - safe_num(current_liabilities)
@@ -113,23 +114,33 @@ def evaluate_status(indicator: str, value: Optional[float]) -> str:
     low, high = ranges.get(indicator, (None, None))
 
     if low is not None and high is not None:
-        if low <= value <= high: return "good"
-        elif (low * 0.8) <= value <= (high * 1.2): return "caution"
-        else: return "poor"
+        if low <= value <= high:
+            return "good"
+        elif (low * 0.8) <= value <= (high * 1.2):
+            return "caution"
+        else:
+            return "poor"
     elif low is not None:
-        if value >= low: return "good"
-        elif value >= (low * 0.8): return "caution"
-        else: return "poor"
+        if value >= low:
+            return "good"
+        elif value >= (low * 0.8):
+            return "caution"
+        else:
+            return "poor"
     elif high is not None:
-        if value <= high: return "good"
-        elif value <= (high * 1.2): return "caution"
-        else: return "poor"
+        if value <= high:
+            return "good"
+        elif value <= (high * 1.2):
+            return "caution"
+        else:
+            return "poor"
     return "unknown"
 
 
 # ---------- Combined Computation ----------
 
-def compute_all(data: Dict[str, Any]):
+def compute_all(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Compute all 18 indicators and an overall health score."""
     ratios = {
         "Current Liquidity Ratio": current_liquidity_ratio(data.get("current_assets"), data.get("current_liabilities")),
         "Quick Ratio": quick_ratio(data.get("current_assets"), data.get("stocks"), data.get("current_liabilities")),
@@ -153,11 +164,36 @@ def compute_all(data: Dict[str, Any]):
         "DSCR (EBIT)": dscr_ebit(data.get("ebit"), data.get("debt_service")),
     }
 
+    # Build structured output
     result = []
+    score_map = {"good": 1.0, "caution": 0.6, "poor": 0.2}
+    total_score = 0
+    valid_count = 0
+
     for name, value in ratios.items():
+        status = evaluate_status(name, value)
+        if status in score_map:
+            total_score += score_map[status]
+            valid_count += 1
+
         result.append({
             "name": name,
             "value": value,
-            "status": evaluate_status(name, value)
+            "status": status
         })
-    return {"ratios": result}
+
+    overall_health_score = round((total_score / valid_count) * 100, 2) if valid_count > 0 else None
+
+    # Categorize groups for GPT-5
+    grouped_summary = {
+        "Liquidity": ["Current Liquidity Ratio", "Quick Ratio", "Absolute Liquidity Ratio"],
+        "Profitability": ["Net Profit Margin (%)", "ROA (%)", "ROE (%)", "ROI (%)"],
+        "Solvency": ["DTI (%)", "Debt-to-EBITDA", "Equity Ratio (%)", "DSCR (Monthly)", "DSCR (EBIT)"],
+        "Efficiency": ["Inventory Turnover", "Receivables Turnover", "Asset Turnover", "Efficiency Ratio", "Working Capital", "DSO"]
+    }
+
+    return {
+        "financial_indicators": result,
+        "overall_health_score": overall_health_score,
+        "categories": grouped_summary
+    }
