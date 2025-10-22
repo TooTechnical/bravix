@@ -8,7 +8,8 @@ explainable financial report. Includes full error handling for Render.
 import os
 import traceback
 from openai import OpenAI
-from .financial_indicators import compute_all
+from app.utils.financial_indicators import compute_all
+
 
 
 
