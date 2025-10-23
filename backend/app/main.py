@@ -1,15 +1,11 @@
 import sys, os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from fastapi import FastAPI, Request, Header, HTTPException, Depends, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import Response
-from app.routes import financial_analysis, upload, analyze
 from dotenv import load_dotenv
-from app.routes import test_connection  # add this line
-
-# near your other routers
-app.include_router(test_connection.router, tags=["Diagnostics"])
-
+from app.routes import financial_analysis, upload, analyze, test_connection
 
 # -------------------------------------------------
 # 1️⃣ Load environment variables
@@ -44,7 +40,6 @@ def is_allowed_origin(origin: str) -> bool:
         return True
     return origin in STATIC_ALLOWED_ORIGINS
 
-
 @app.middleware("http")
 async def dynamic_cors_middleware(request: Request, call_next):
     """Attach proper CORS headers for dynamic Vercel origins."""
@@ -63,7 +58,6 @@ async def dynamic_cors_middleware(request: Request, call_next):
         )
 
     return response
-
 
 # ✅ Backup CORS middleware (ensures safety fallback)
 app.add_middleware(
@@ -85,7 +79,7 @@ async def verify_api_key(x_api_key: str = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid or missing API Key")
 
 # -------------------------------------------------
-# 5️⃣ Include Routers (Financial + Upload + Analyze)
+# 5️⃣ Include Routers (Financial + Upload + Analyze + Diagnostics)
 # -------------------------------------------------
 app.include_router(
     financial_analysis.router,
@@ -107,6 +101,9 @@ app.include_router(
     tags=["AI Analysis"],
     dependencies=[Depends(verify_api_key)],
 )
+
+# ✅ Add diagnostics route (test_connection)
+app.include_router(test_connection.router, tags=["Diagnostics"])
 
 # -------------------------------------------------
 # 6️⃣ Alias route (for backward compatibility)
