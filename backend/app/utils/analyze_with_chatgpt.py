@@ -5,13 +5,13 @@ from openai import OpenAI
 def get_openai_client():
     """
     Safely creates an OpenAI client at runtime (Render-compatible).
+    Includes an explicit base URL for maximum compatibility.
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("Missing OPENAI_API_KEY environment variable")
-    return OpenAI(api_key=api_key)
 
-# ✅ Explicit base URL ensures connection works in all environments
+    print("🔑 OpenAI API key loaded successfully (first 8 chars):", api_key[:8], "...")
     return OpenAI(
         api_key=api_key,
         base_url="https://api.openai.com/v1"
@@ -24,7 +24,7 @@ def analyze_with_chatgpt(raw_text: str, indicators: dict, client: OpenAI = None)
     using all 18 indicators. Produces a detailed, structured report.
     """
 
-    # ✅ Ensure a valid client exists
+    # ✅ Ensure a valid OpenAI client exists
     if client is None:
         client = get_openai_client()
 
@@ -37,7 +37,8 @@ You are a senior financial risk analyst. Evaluate this company’s financial hea
 liquidity, profitability, leverage, solvency, and creditworthiness.
 
 Base your analysis on the extracted document data and the following 18 key financial indicators.
-For each indicator, compare the company's calculated value with the benchmark range and identify whether it is Healthy, Weak, or Concerning.
+For each indicator, compare the company's calculated value with the benchmark range
+and identify whether it is Healthy, Weak, or Concerning.
 
 --- EXTRACTED DOCUMENT DATA ---
 {raw_text[:2500]}
@@ -101,17 +102,19 @@ Provide:
         try:
             print(f"\n🧠 Sending this summary to {model.upper()}...\n{'-'*60}")
 
+            # GPT-5 uses max_completion_tokens; GPT-4o uses max_tokens
+            token_param = (
+                {"max_completion_tokens": 1000} if model == "gpt-5" else {"max_tokens": 1000}
+            )
+
             completion = client.chat.completions.create(
                 model=model,
                 messages=[
                     {"role": "system", "content": "You are an expert financial and credit risk analyst."},
                     {"role": "user", "content": prompt},
                 ],
-                **(
-                    {"max_completion_tokens": 1000}
-                    if model == "gpt-5"
-                    else {"max_tokens": 1000}
-                ),
+                temperature=0.4,
+                **token_param,
             )
 
             text = completion.choices[0].message.content.strip()
