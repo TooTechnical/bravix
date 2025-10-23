@@ -1,9 +1,16 @@
-from openai import OpenAI
 import os
+from openai import OpenAI
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+def get_openai_client():
+    """
+    Safely creates an OpenAI client at runtime (Render-compatible).
+    """
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("Missing OPENAI_API_KEY environment variable")
+    return OpenAI(api_key=api_key)
 
-def analyze_with_chatgpt(raw_text: str, indicators: dict):
+def analyze_with_chatgpt(raw_text: str, indicators: dict, client: OpenAI):
     """
     Uses GPT-5 (preferred) or GPT-4o (fallback) to analyze financial risk
     using all 18 indicators. Produces a detailed, structured report.
@@ -12,7 +19,6 @@ def analyze_with_chatgpt(raw_text: str, indicators: dict):
     if not raw_text or raw_text.strip() == "":
         raw_text = "No extracted financial text available."
 
-    # --- Build structured, expert-level prompt ---
     prompt = f"""
 You are a senior financial risk analyst. Evaluate this company’s financial health,
 liquidity, profitability, leverage, solvency, and creditworthiness.
@@ -53,10 +59,6 @@ Summarize the company’s overall financial condition and the reliability of the
 
 **Indicator Comparison:**
 Briefly comment on how each ratio compares to its healthy range.
-Example:
-- Current Ratio: 1.3 (slightly below optimal)
-- ROE: 18.5% (strong)
-- DTI: 60% (too high, risky)
 
 **Strengths:**
 Highlight areas where the company performs well.
@@ -81,17 +83,11 @@ Provide:
 - Final Summary (1–2 paragraphs explaining the overall judgment)
 """
 
-    # --- Try GPT-5 first, then GPT-4o fallback ---
     for model in ["gpt-5", "gpt-4o"]:
         try:
-            print(f"\n🧠 Sending this summary to {model.upper()}:\n")
-            print(prompt[:400] + "...")
-            print("-" * 60)
+            print(f"\n🧠 Sending this summary to {model.upper()}:\n{prompt[:400]}...\n{'-'*60}")
 
-            # Use correct parameter for each model
-            params = (
-                {"max_completion_tokens": 1000} if model == "gpt-5" else {"max_tokens": 1000}
-            )
+            params = {"max_completion_tokens": 1000} if model == "gpt-5" else {"max_tokens": 1000}
 
             completion = client.chat.completions.create(
                 model=model,
@@ -111,6 +107,5 @@ Provide:
             print(f"⚠️ {model} failed:", e)
             continue
 
-    # If both fail
     print("❌ No models succeeded.")
     return {"analysis_raw": "No analysis returned by GPT-5 or GPT-4o."}
