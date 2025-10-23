@@ -10,15 +10,21 @@ def get_openai_client():
         raise ValueError("Missing OPENAI_API_KEY environment variable")
     return OpenAI(api_key=api_key)
 
-def analyze_with_chatgpt(raw_text: str, indicators: dict, client: OpenAI):
+
+def analyze_with_chatgpt(raw_text: str, indicators: dict, client: OpenAI = None):
     """
     Uses GPT-5 (preferred) or GPT-4o (fallback) to analyze financial risk
     using all 18 indicators. Produces a detailed, structured report.
     """
 
+    # ✅ Ensure a valid client exists
+    if client is None:
+        client = get_openai_client()
+
     if not raw_text or raw_text.strip() == "":
         raw_text = "No extracted financial text available."
 
+    # --- Build structured expert prompt ---
     prompt = f"""
 You are a senior financial risk analyst. Evaluate this company’s financial health,
 liquidity, profitability, leverage, solvency, and creditworthiness.
@@ -83,11 +89,10 @@ Provide:
 - Final Summary (1–2 paragraphs explaining the overall judgment)
 """
 
+    # ✅ Attempt GPT-5 first, fallback to GPT-4o
     for model in ["gpt-5", "gpt-4o"]:
         try:
-            print(f"\n🧠 Sending this summary to {model.upper()}:\n{prompt[:400]}...\n{'-'*60}")
-
-            params = {"max_completion_tokens": 1000} if model == "gpt-5" else {"max_tokens": 1000}
+            print(f"\n🧠 Sending this summary to {model.upper()}...\n{'-'*60}")
 
             completion = client.chat.completions.create(
                 model=model,
@@ -95,7 +100,11 @@ Provide:
                     {"role": "system", "content": "You are an expert financial and credit risk analyst."},
                     {"role": "user", "content": prompt},
                 ],
-                **params,
+                **(
+                    {"max_completion_tokens": 1000}
+                    if model == "gpt-5"
+                    else {"max_tokens": 1000}
+                ),
             )
 
             text = completion.choices[0].message.content.strip()
@@ -107,5 +116,6 @@ Provide:
             print(f"⚠️ {model} failed:", e)
             continue
 
+    # ❌ If both fail
     print("❌ No models succeeded.")
     return {"analysis_raw": "No analysis returned by GPT-5 or GPT-4o."}
