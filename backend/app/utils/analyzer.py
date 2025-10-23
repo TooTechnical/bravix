@@ -7,10 +7,8 @@ explainable financial report. Includes full error handling for Render.
 
 import os
 import traceback
-from openai import OpenAI
 from app.utils.financial_indicators import compute_all
-
-
+from app.utils.analyze_with_chatgpt import get_openai_client, analyze_with_chatgpt
 
 
 def analyze_data(payload: dict):
@@ -27,71 +25,56 @@ def analyze_data(payload: dict):
         indicators = indicator_data.get("financial_indicators", [])
         overall_score = indicator_data.get("overall_health_score")
 
-        # --- Step 3: Prepare for GPT-5
+        # --- Step 3: Check API key availability
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key or not api_key.strip():
             print("⚠️ No OpenAI API key found. Returning simulated response.")
             return {
+                "status": "warning",
                 "summary": "AI analysis unavailable (no API key detected).",
                 "insight": "Simulated placeholder output based on 18 financial indicators.",
-                "indicators": indicator_data
+                "overall_health_score": overall_score,
+                "financial_indicators": indicators
             }
 
-        client = OpenAI(api_key=api_key)
-        print("🔑 OpenAI API key loaded successfully (first 6 chars):", api_key[:6])
+        # --- Step 4: Initialize OpenAI client
+        try:
+            client = get_openai_client()
+            print("🔑 OpenAI API client initialized successfully.")
+        except Exception as e:
+            print("⚠️ Failed to initialize OpenAI client:", str(e))
+            return {
+                "status": "error",
+                "summary": "Failed to initialize OpenAI client.",
+                "details": str(e),
+                "financial_indicators": indicators
+            }
 
-        # --- Step 4: Build structured indicator summary for GPT prompt
-        indicator_summary = "\n".join([
-            f"- {i['name']}: {i['value']} ({i['status']})"
-            for i in indicators
-        ])
+        # --- Step 5: Build structured indicator dictionary
+        indicator_dict = {
+            i["name"].lower().replace(" ", "_"): i["value"] for i in indicators
+        }
+        indicator_dict["readiness_score"] = overall_score or 0
 
-        # --- Step 5: Compose prompt
-        prompt = f"""
-        You are Braivix AI — an expert financial analyst assisting banks and investors.
+        # --- Step 6: Call GPT-5/4o analysis
+        print("🧠 Sending indicators + text to GPT analysis...")
+        ai_result = analyze_with_chatgpt(data_text, indicator_dict, client)
 
-        Analyze the following financial indicators and determine the company’s financial health,
-        liquidity, profitability, solvency, and efficiency. Use real-world banking standards.
+        ai_output = ai_result.get("analysis_raw", "").strip()
+        if not ai_output:
+            ai_output = "AI returned no analysis text."
 
-        Provide:
-        1. Executive Summary (2–3 paragraphs)
-        2. Key Strengths and Weaknesses
-        3. Credit Risk Rating (0–100, higher = higher risk)
-        4. Lending Recommendation
-        5. Explanation of how the 18 indicators influenced your decision
+        print("✅ AI analysis complete. Length:", len(ai_output))
 
-        ---
-        RAW DATA EXTRACT:
-        {data_text[:1500]}  # Limit text length for efficiency
-        ---
-        FINANCIAL INDICATORS:
-        {indicator_summary}
-        ---
-        OVERALL HEALTH SCORE (calculated internally): {overall_score}
-        """
-
-        # --- Step 6: Call GPT-5 API
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # GPT-4 Optimized model (GPT-5-equivalent reasoning)
-            messages=[
-                {"role": "system", "content": "You are an advanced financial analysis AI for Braivix."},
-                {"role": "user", "content": prompt.strip()}
-            ],
-            temperature=0.5,
-            max_tokens=900
-        )
-
-        ai_output = response.choices[0].message.content.strip()
-        print("✅ AI response generated successfully (chars):", len(ai_output))
-
+        # --- Step 7: Return structured response
         return {
             "status": "success",
             "summary": ai_output,
             "overall_health_score": overall_score,
-            "financial_indicators": indicators
+            "financial_indicators": indicators,
         }
 
     except Exception as e:
         print("❌ AI analysis failed:", str(e))
         traceback.print_exc()
-        return {"error": f"AI analysis failed: {str(e)}"}
+        return {"status": "error", "error": f"AI analysis failed: {str(e)}"}
