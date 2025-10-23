@@ -1,20 +1,28 @@
 import os
+import httpx
 from openai import OpenAI
 
 
 def get_openai_client():
     """
     Safely creates an OpenAI client at runtime (Render-compatible).
-    Includes an explicit base URL for maximum compatibility.
+    Forces HTTP/1.1 to avoid Render proxy issues and adds a longer timeout.
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("Missing OPENAI_API_KEY environment variable")
 
     print("🔑 OpenAI API key loaded successfully (first 8 chars):", api_key[:8], "...")
+
+    # 👇 Custom HTTP client for Render compatibility (HTTP/1.1 + 30s timeout)
+    transport = httpx.HTTPTransport(http2=False)
+    http_client = httpx.Client(transport=transport, timeout=30.0)
+
+    print("🔑 OpenAI API client initialized successfully.")
     return OpenAI(
         api_key=api_key,
-        base_url="https://api.openai.com/v1"
+        base_url="https://api.openai.com/v1",
+        http_client=http_client
     )
 
 
