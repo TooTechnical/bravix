@@ -3,6 +3,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, Request, Header, HTTPException, Depends, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import Response
 from app.routes import financial_analysis, upload, analyze
 from dotenv import load_dotenv
 
@@ -21,7 +22,7 @@ app = FastAPI(
 )
 
 # -------------------------------------------------
-# 3️⃣ CORS Configuration (Dynamic + Static)
+# 3️⃣ Dynamic CORS Configuration (Full Fix)
 # -------------------------------------------------
 STATIC_ALLOWED_ORIGINS = [
     "https://bravix-ai.vercel.app",
@@ -32,45 +33,38 @@ STATIC_ALLOWED_ORIGINS = [
 ]
 
 def is_allowed_origin(origin: str) -> bool:
-    """Allow dynamic Vercel previews automatically."""
+    """Allow all Vercel preview and localhost origins dynamically."""
     if not origin:
         return False
     if origin.endswith(".vercel.app"):
         return True
     return origin in STATIC_ALLOWED_ORIGINS
 
+
 @app.middleware("http")
 async def dynamic_cors_middleware(request: Request, call_next):
-    """
-    Dynamically attach CORS headers so OPTIONS never fails
-    even before reaching the route logic.
-    """
-    # Handle preflight requests immediately
-    if request.method == "OPTIONS":
-        origin = request.headers.get("origin")
-        from fastapi.responses import Response
-        response = Response()
-        if origin and is_allowed_origin(origin):
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = (
-                "Authorization, Content-Type, X-API-Key, x-api-key"
-            )
-        return response
-
-    # For normal requests
-    response = await call_next(request)
+    """Attach proper CORS headers for dynamic Vercel origins."""
     origin = request.headers.get("origin")
+    if request.method == "OPTIONS":
+        response = Response()
+    else:
+        response = await call_next(request)
+
     if origin and is_allowed_origin(origin):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Authorization, Content-Type, X-API-Key, x-api-key"
+        )
+
     return response
 
-# Add base middleware for safety — ensures CORS always passes through
+
+# ✅ Backup CORS middleware (ensures safety fallback)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # fallback for any missed origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -117,9 +111,7 @@ alias_router = APIRouter()
 
 @alias_router.post("/api/financial-analysis")
 async def alias_financial_analysis(payload: dict, x_api_key: str = Header(None)):
-    """
-    Redirects /api/financial-analysis requests to /api/financial/financial-analysis.
-    """
+    """Redirects /api/financial-analysis requests to /api/financial/financial-analysis."""
     try:
         from app.routes.financial_analysis import financial_analysis
         return await financial_analysis(payload)
