@@ -11,6 +11,7 @@ pdf2image
 Pillow
 openai>=1.51.0
 python-dotenv
+requests
 
 
 
