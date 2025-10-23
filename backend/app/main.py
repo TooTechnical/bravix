@@ -1,11 +1,15 @@
 import sys, os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 from fastapi import FastAPI, Request, Header, HTTPException, Depends, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import Response
 from app.routes import financial_analysis, upload, analyze
 from dotenv import load_dotenv
+from app.routes import test_connection  # add this line
+
+# near your other routers
+app.include_router(test_connection.router, tags=["Diagnostics"])
+
 
 # -------------------------------------------------
 # 1️⃣ Load environment variables
