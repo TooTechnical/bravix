@@ -1,6 +1,7 @@
 import os
 from openai import OpenAI
 
+
 def get_openai_client():
     """
     Safely creates an OpenAI client at runtime (Render-compatible).
@@ -9,6 +10,12 @@ def get_openai_client():
     if not api_key:
         raise ValueError("Missing OPENAI_API_KEY environment variable")
     return OpenAI(api_key=api_key)
+
+# ✅ Explicit base URL ensures connection works in all environments
+    return OpenAI(
+        api_key=api_key,
+        base_url="https://api.openai.com/v1"
+    )
 
 
 def analyze_with_chatgpt(raw_text: str, indicators: dict, client: OpenAI = None):
