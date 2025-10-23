@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Header
-from app.financial_indicators import compute_all
+from backend.app.utils.financial_indicators import compute_all
 
 router = APIRouter()
 
