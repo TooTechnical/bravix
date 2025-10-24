@@ -1,27 +1,29 @@
 // src/bravixApi.js
+// Bravix Frontend API Utility
+// Handles communication with FastAPI backend (Vercel or local)
 
-// 🌐 Dynamic backend selection — prefers Vercel, falls back to local
+// 🌐 Dynamic backend selection (Vercel → local fallback)
 const API_BASE =
   import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== ""
     ? `${import.meta.env.VITE_API_URL}/api`
-    : "https://bravix-api.vercel.app/api"; // ✅ Default to Vercel backend
+    : "https://braivix.vercel.app/api"; // ✅ Default to deployed backend
 
-// 🔐 Secure API Key (matches FastAPI's key)
+// 🔐 Secure header key (must match backend’s FastAPI API key)
 const API_KEY =
   import.meta.env.VITE_API_KEY && import.meta.env.VITE_API_KEY.trim() !== ""
     ? import.meta.env.VITE_API_KEY
     : "BRAVIX-DEMO-SECURE-KEY-2025";
 
-// 🧩 Utility: handle response safely
+// 🧩 Helper – unified fetch response handler
 async function handleResponse(res, context) {
   if (!res.ok) {
-    const errorText = await res.text();
-    console.error(`❌ ${context} failed:`, errorText);
+    const text = await res.text();
+    console.error(`❌ ${context} failed (${res.status}):`, text);
     throw new Error(`${context} failed (${res.status})`);
   }
-  const data = await res.json();
-  console.log(`✅ ${context} response:`, data);
-  return data;
+  const json = await res.json();
+  console.log(`✅ ${context} response:`, json);
+  return json;
 }
 
 // 📤 Upload file (PDF, CSV, XLSX, DOCX)
@@ -47,7 +49,7 @@ export async function uploadFile(file) {
   }
 }
 
-// 🧠 Analyze parsed data with GPT-based AI and indicators
+// 🧠 Analyze parsed data with GPT (financial indicators + AI insight)
 export async function analyzeData(parsedData, rawText = "") {
   if (!parsedData || typeof parsedData !== "object") {
     throw new Error("Invalid parsed data for AI analysis.");
@@ -77,17 +79,21 @@ export async function analyzeData(parsedData, rawText = "") {
   }
 }
 
-// 🔍 Optional health check (to verify backend is alive)
+// 🔍 Health check (verifies backend availability)
 export async function checkHealth() {
-  const endpoint = `${API_BASE.replace("/api", "")}/health`;
+  const endpoint = `${API_BASE.replace("/api", "")}/api/test-connection`;
   console.log("🔍 Checking backend health:", endpoint);
+
   try {
     const res = await fetch(endpoint);
     const data = await res.json();
-    console.log("💚 Backend health:", data);
+    console.log("💚 Backend health check result:", data);
     return data;
   } catch (err) {
     console.warn("⚠️ Health check failed:", err.message);
     return { status: "offline", error: err.message };
   }
 }
+
+// 🧭 Debug info (optional – helps ensure correct API target)
+console.log("🌍 Active API base:", API_BASE);

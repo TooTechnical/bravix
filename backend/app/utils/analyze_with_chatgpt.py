@@ -3,23 +3,35 @@ from openai import OpenAI
 
 def get_openai_client():
     """
-    Safely creates an OpenAI client at runtime (Render-compatible).
+    Creates an OpenAI client that automatically detects your environment.
+    Supports both the default OpenAI API and custom proxy URLs (like api.openai-proxy.com).
     """
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("Missing OPENAI_API_KEY environment variable")
+    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
-    print("🔑 OpenAI API key loaded successfully (first 8 chars):", api_key[:8], "...")
-    return OpenAI(api_key=api_key)
+    if not api_key:
+        raise ValueError("❌ Missing OPENAI_API_KEY environment variable.")
+
+    # Log only the first 8 chars for safety
+    print(f"🔑 OpenAI API key loaded (first 8 chars): {api_key[:8]}...")
+    print(f"🌐 Using OpenAI Base URL: {base_url}")
+
+    try:
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        print("✅ OpenAI client initialized successfully.")
+        return client
+    except Exception as e:
+        print(f"⚠️ Failed to initialize OpenAI client: {e}")
+        raise
 
 
 def analyze_with_chatgpt(raw_text: str, indicators: dict, client: OpenAI = None):
     """
     Uses GPT-5 (preferred) or GPT-4o (fallback) to analyze financial risk
-    using all 18 indicators. Produces a detailed, structured report.
+    using the 18 key financial indicators.
     """
 
-    # ✅ Ensure a valid OpenAI client exists
+    # ✅ Ensure we have a working OpenAI client
     if client is None:
         client = get_openai_client()
 
@@ -63,42 +75,38 @@ Overall Readiness Score = {indicators.get('readiness_score')}/100
 Please analyze and respond using this structured format:
 
 **Overview:**
-Summarize the company’s overall financial condition and the reliability of the data.
+Summarize the company’s overall financial condition and data reliability.
 
 **Indicator Comparison:**
 Briefly comment on how each ratio compares to its healthy range.
 
 **Strengths:**
-Highlight areas where the company performs well.
+Highlight strong financial areas.
 
 **Weaknesses / Risk Factors:**
-Identify concerning metrics or trends and explain why they increase financial risk.
+Identify metrics or trends that increase risk.
 
 **Liquidity Assessment:**
-Is the company able to meet its short-term obligations?
+Assess the company’s short-term solvency.
 
 **Profitability Assessment:**
-Is the company generating sufficient returns from its operations?
+Evaluate returns and efficiency.
 
 **Solvency / Leverage Assessment:**
-Evaluate the company’s long-term financial stability and debt exposure.
+Comment on long-term debt exposure and resilience.
 
 **Credit Decision Summary:**
 Provide:
 - Loan Recommendation (Approve / Review / Reject)
 - Risk Level (Low / Medium / High)
 - Risk Score (0–100)
-- Final Summary (1–2 paragraphs explaining the overall judgment)
+- Final Summary (2–3 sentences of reasoning)
 """
 
-    # ✅ Attempt GPT-5 first, fallback to GPT-4o
+    # ✅ Try GPT-5 first, fallback to GPT-4o
     for model in ["gpt-5", "gpt-4o"]:
         try:
-            print(f"\n🧠 Sending this summary to {model.upper()}...\n{'-'*60}")
-
-            token_param = (
-                {"max_completion_tokens": 1000} if model == "gpt-5" else {"max_tokens": 1000}
-            )
+            print(f"\n🧠 Sending financial summary to {model.upper()}...\n{'-'*60}")
 
             completion = client.chat.completions.create(
                 model=model,
@@ -107,18 +115,19 @@ Provide:
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.4,
-                **token_param,
+                max_completion_tokens=1200 if model == "gpt-5" else None,
+                max_tokens=1200 if model == "gpt-4o" else None,
             )
 
-            text = completion.choices[0].message.content.strip()
-            if text:
-                print(f"✅ AI analysis complete using {model}")
-                return {"analysis_raw": text}
+            response_text = completion.choices[0].message.content.strip()
+            if response_text:
+                print(f"✅ Analysis successfully generated using {model.upper()}.")
+                return {"analysis_raw": response_text}
 
         except Exception as e:
-            print(f"⚠️ {model} failed:", e)
+            print(f"⚠️ {model.upper()} failed: {e}")
             continue
 
-    # ❌ If both fail
-    print("❌ No models succeeded.")
+    # ❌ If all attempts fail
+    print("❌ Both GPT models failed to return a response.")
     return {"analysis_raw": "No analysis returned by GPT-5 or GPT-4o."}
