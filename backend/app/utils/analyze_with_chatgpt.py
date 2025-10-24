@@ -6,22 +6,27 @@ from openai import OpenAI
 def get_openai_client():
     """
     Safely creates an OpenAI client at runtime (Render-compatible).
-    Forces HTTP/1.1 to avoid Render proxy issues and adds a longer timeout.
+    Forces HTTP/1.1 and allows routing through an external proxy layer
+    if OPENAI_BASE_URL is defined in the environment.
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("Missing OPENAI_API_KEY environment variable")
 
-    print("🔑 OpenAI API key loaded successfully (first 8 chars):", api_key[:8], "...")
+    # 👇 Use proxy base URL if provided (set in Render env)
+    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
-    # 👇 Custom HTTP client for Render compatibility (HTTP/1.1 + 30s timeout)
+    print("🔑 OpenAI API key loaded (first 8 chars):", api_key[:8], "...")
+    print("🌐 Using base URL:", base_url)
+
+    # 👇 Custom HTTP client: HTTP/1.1 + 30s timeout (Render-safe)
     transport = httpx.HTTPTransport(http2=False)
     http_client = httpx.Client(transport=transport, timeout=30.0)
 
     print("🔑 OpenAI API client initialized successfully.")
     return OpenAI(
         api_key=api_key,
-        base_url="https://api.openai.com/v1",
+        base_url=base_url,
         http_client=http_client
     )
 
