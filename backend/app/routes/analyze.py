@@ -1,7 +1,7 @@
 import os
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Header
 from pydantic import BaseModel
-from app.routes.analyze_with_chatgpt import analyze_with_chatgpt
+from app.utils.analyze_with_chatgpt import analyze_with_chatgpt
 from dotenv import load_dotenv
 
 router = APIRouter()
