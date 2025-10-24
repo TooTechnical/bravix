@@ -1,46 +1,38 @@
-import os
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Header
-from pydantic import BaseModel
+"""
+Bravix – AI Financial Analysis Route
+------------------------------------
+Handles incoming requests for AI-based financial report generation
+using the GPT-5 and GPT-4o models.
+"""
+
+from fastapi import APIRouter, HTTPException, Request
 from app.utils.analyze_with_chatgpt import analyze_with_chatgpt
-from dotenv import load_dotenv
 
 router = APIRouter()
 
-load_dotenv()
 
-API_KEY = "BRAVIX-DEMO-SECURE-KEY-2025"
-
-
-# ✅ Security dependency
-async def verify_api_key(x_api_key: str = Header(None)):
-    if x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid or missing API Key")
-
-
-class AnalysisRequest(BaseModel):
-    text: str
-    indicators: dict
-
-
-@router.post("/api/analyze", dependencies=[Depends(verify_api_key)])
-async def analyze(request: AnalysisRequest):
+@router.post("/analyze")
+async def analyze_file(request: Request):
     """
-    Main AI Analysis endpoint.
-    Accepts extracted text and financial indicators,
-    sends them to GPT for analysis, and returns the AI’s report.
+    Accepts parsed financial data and runs AI analysis.
     """
     try:
-        print("🧠 Sending indicators + text to GPT analysis...")
-        ai_analysis = analyze_with_chatgpt(
-            raw_text=request.text,
-            indicators=request.indicators
-        )
+        data = await request.json()
+        raw_text = data.get("raw_text", "")
+        indicators = data.get("indicators", {})
+
+        print("🧠 Received AI analysis request.")
+        print(f"Raw text length: {len(raw_text)} | Indicators: {len(indicators)}")
+
+        result = analyze_with_chatgpt(raw_text, indicators)
+        print("✅ AI analysis completed successfully.")
+
         return {
             "status": "success",
             "message": "AI analysis complete",
-            "ai_analysis": ai_analysis.get("analysis_raw")
+            "ai_analysis": result.get("analysis_raw", "No response from AI"),
         }
 
     except Exception as e:
-        print("❌ AI analysis failed:", e)
+        print("❌ AI analysis failed:", str(e))
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")

@@ -1,8 +1,17 @@
+"""
+Bravix Backend – Main Application
+---------------------------------
+FastAPI entrypoint for Render deployment.
+Handles CORS, API key verification, and routes for financial upload + AI analysis.
+"""
+
 import sys, os
 from fastapi import FastAPI, Request, Header, HTTPException, Depends, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import Response
 from dotenv import load_dotenv
+
+# Import route modules
 from app.routes import financial_analysis, upload, analyze, test_connection
 
 # -------------------------------------------------
@@ -20,7 +29,7 @@ app = FastAPI(
 )
 
 # -------------------------------------------------
-# 3️⃣ Dynamic CORS Configuration
+# 3️⃣ Dynamic CORS Configuration (Full Fix)
 # -------------------------------------------------
 STATIC_ALLOWED_ORIGINS = [
     "https://bravix-ai.vercel.app",
@@ -59,10 +68,10 @@ async def dynamic_cors_middleware(request: Request, call_next):
     return response
 
 
-# ✅ Backup CORS middleware (fallback)
+# ✅ Backup CORS middleware (ensures safety fallback)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # fallback for safety
+    allow_origins=["*"],  # fallback for any missed origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -79,7 +88,7 @@ async def verify_api_key(x_api_key: str = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid or missing API Key")
 
 # -------------------------------------------------
-# 5️⃣ Include Routers
+# 5️⃣ Include Routers (Financial + Upload + Analyze)
 # -------------------------------------------------
 app.include_router(
     financial_analysis.router,
@@ -102,31 +111,18 @@ app.include_router(
     dependencies=[Depends(verify_api_key)],
 )
 
-# ✅ Add diagnostic test route
-app.include_router(test_connection.router, tags=["Diagnostics"])
+app.include_router(
+    test_connection.router,
+    prefix="/api",
+    tags=["Diagnostics"],
+)
 
 # -------------------------------------------------
-# 6️⃣ Alias route for backward compatibility
-# -------------------------------------------------
-alias_router = APIRouter()
-
-@alias_router.post("/api/financial-analysis")
-async def alias_financial_analysis(payload: dict, x_api_key: str = Header(None)):
-    """Redirects /api/financial-analysis requests to /api/financial/financial-analysis."""
-    try:
-        from app.routes.financial_analysis import financial_analysis
-        return await financial_analysis(payload)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Alias route failed: {str(e)}")
-
-app.include_router(alias_router)
-
-# -------------------------------------------------
-# 7️⃣ Utility & Health Check Endpoints
+# 6️⃣ Root & Debug Routes
 # -------------------------------------------------
 @app.get("/")
 def root():
-    return {"message": "Bravix Demo API running (CORS + Secure API Key + GPT Ready)"}
+    return {"message": "Bravix Demo API running (Dynamic CORS + API Key Secured)"}
 
 @app.get("/debug-cors")
 async def debug_cors(request: Request):
