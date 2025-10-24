@@ -17,11 +17,12 @@ app = FastAPI(
 
 # ✅ CORS configuration
 allowed_origins = [
-    "https://bravix.vercel.app",       # Primary frontend
-    "https://bravix-ai.vercel.app",    # Alternate frontend domain
-    "https://bravix-git-main-tootechnicals-projects.vercel.app/",  # Vercel preview
-    "http://localhost:5173",           # Local development
-    "http://127.0.0.1:5173",           # Alternate local dev
+    "https://braivix.vercel.app",       # ⚙️ Updated: your actual deployed domain
+    "https://bravix.vercel.app",        # (keep this as fallback)
+    "https://bravix-ai.vercel.app",     # Alternate frontend domain
+    "https://bravix-git-main-tootechnicals-projects.vercel.app",  # remove trailing slash
+    "http://localhost:5173",            # Local development
+    "http://127.0.0.1:5173",            # Alternate local dev
 ]
 
 app.add_middleware(
@@ -32,13 +33,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Include all route modules under /api prefix
+# ✅ Register API routers (under /api prefix)
 app.include_router(upload.router, prefix="/api", tags=["File Upload"])
 app.include_router(analyze.router, prefix="/api", tags=["AI Analysis"])
 app.include_router(financial_analysis.router, prefix="/api", tags=["Financial Indicators"])
 app.include_router(test_connection.router, prefix="/api", tags=["Health Check"])
 
-# ✅ Root endpoint for quick testing / health verification
+# ✅ Root endpoint
 @app.get("/")
 def root():
     print("🌐 Root endpoint accessed – backend is running.")
@@ -48,12 +49,11 @@ def root():
         "version": "1.1",
     }
 
-# ✅ Startup event for logging
+# ✅ Startup and Shutdown events
 @app.on_event("startup")
 def on_startup():
     print("🚀 Bravix backend is starting up – routes and CORS ready.")
 
-# ✅ Shutdown event for graceful cleanup
 @app.on_event("shutdown")
 def on_shutdown():
     print("🛑 Bravix backend shutting down gracefully.")
