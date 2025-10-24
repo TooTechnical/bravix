@@ -19,6 +19,7 @@ app = FastAPI(
 allowed_origins = [
     "https://bravix.vercel.app",       # Primary frontend
     "https://bravix-ai.vercel.app",    # Alternate frontend domain
+    "https://bravix-git-main-tootechnicals-projects.vercel.app/",  # Vercel preview
     "http://localhost:5173",           # Local development
     "http://127.0.0.1:5173",           # Alternate local dev
 ]
