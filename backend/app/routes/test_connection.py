@@ -1,3 +1,4 @@
+import os
 import requests
 from fastapi import APIRouter
 
@@ -6,39 +7,28 @@ router = APIRouter()
 @router.get("/api/test-connection")
 def test_connection():
     """
-    Tests outbound HTTPS connectivity to OpenAI's API endpoint.
-    This will help verify if Render can reach api.openai.com.
+    Simple endpoint to verify that the server can reach OpenAI
+    and that your API key works correctly.
     """
-    url = "https://api.openai.com/v1/models"
+    api_key = os.getenv("OPENAI_API_KEY")
+
+    if not api_key:
+        return {"status": "error", "message": "OPENAI_API_KEY is missing in environment variables."}
+
+    headers = {"Authorization": f"Bearer {api_key}"}
     try:
-        response = requests.get(url, timeout=5)
+        # Make a simple GET call to OpenAI’s model list endpoint
+        r = requests.get("https://api.openai.com/v1/models", headers=headers, timeout=10)
+        reachable = r.status_code == 200
         return {
             "status": "success",
-            "response_code": response.status_code,
-            "reachable": True,
-            "note": "Outbound connection to OpenAI succeeded."
-        }
-    except requests.exceptions.Timeout:
-        return {
-            "status": "error",
-            "reachable": False,
-            "error": "Timeout — Render likely blocks external API calls."
-        }
-    except requests.exceptions.SSLError:
-        return {
-            "status": "error",
-            "reachable": False,
-            "error": "SSL verification failed — possible proxy or cert issue."
-        }
-    except requests.exceptions.ConnectionError as e:
-        return {
-            "status": "error",
-            "reachable": False,
-            "error": f"Connection error: {str(e)}"
+            "response_code": r.status_code,
+            "reachable": reachable,
+            "note": "Outbound connection to OpenAI succeeded." if reachable else "Connection failed."
         }
     except Exception as e:
         return {
             "status": "error",
-            "reachable": False,
-            "error": f"Unexpected error: {str(e)}"
+            "message": str(e),
+            "reachable": False
         }

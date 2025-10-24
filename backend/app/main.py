@@ -1,6 +1,4 @@
 import sys, os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 from fastapi import FastAPI, Request, Header, HTTPException, Depends, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import Response
@@ -22,12 +20,12 @@ app = FastAPI(
 )
 
 # -------------------------------------------------
-# 3️⃣ Dynamic CORS Configuration (Full Fix)
+# 3️⃣ Dynamic CORS Configuration
 # -------------------------------------------------
 STATIC_ALLOWED_ORIGINS = [
     "https://bravix-ai.vercel.app",
-    "https://bravix-pi.vercel.app",
     "https://bravix.vercel.app",
+    "https://bravix-pi.vercel.app",
     "http://localhost:5173",
     "http://localhost:3000",
 ]
@@ -39,6 +37,7 @@ def is_allowed_origin(origin: str) -> bool:
     if origin.endswith(".vercel.app"):
         return True
     return origin in STATIC_ALLOWED_ORIGINS
+
 
 @app.middleware("http")
 async def dynamic_cors_middleware(request: Request, call_next):
@@ -59,10 +58,11 @@ async def dynamic_cors_middleware(request: Request, call_next):
 
     return response
 
-# ✅ Backup CORS middleware (ensures safety fallback)
+
+# ✅ Backup CORS middleware (fallback)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # fallback for any missed origins
+    allow_origins=["*"],  # fallback for safety
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -79,7 +79,7 @@ async def verify_api_key(x_api_key: str = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid or missing API Key")
 
 # -------------------------------------------------
-# 5️⃣ Include Routers (Financial + Upload + Analyze + Diagnostics)
+# 5️⃣ Include Routers
 # -------------------------------------------------
 app.include_router(
     financial_analysis.router,
@@ -102,11 +102,11 @@ app.include_router(
     dependencies=[Depends(verify_api_key)],
 )
 
-# ✅ Add diagnostics route (test_connection)
+# ✅ Add diagnostic test route
 app.include_router(test_connection.router, tags=["Diagnostics"])
 
 # -------------------------------------------------
-# 6️⃣ Alias route (for backward compatibility)
+# 6️⃣ Alias route for backward compatibility
 # -------------------------------------------------
 alias_router = APIRouter()
 
@@ -126,7 +126,7 @@ app.include_router(alias_router)
 # -------------------------------------------------
 @app.get("/")
 def root():
-    return {"message": "Bravix Demo API running (Dynamic CORS + API Key Secured)"}
+    return {"message": "Bravix Demo API running (CORS + Secure API Key + GPT Ready)"}
 
 @app.get("/debug-cors")
 async def debug_cors(request: Request):
