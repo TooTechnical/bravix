@@ -73,36 +73,38 @@ def parse_file(file):
 
         text = clean_text(text)
 
-        # --- Keyword patterns ---
+        # --- Keyword patterns (improved for inline table style) ---
         patterns = {
             "revenue": [
-                r"(?:total\s+)?revenue[^0-9\-]+([\d\.]+)",
-                r"turnover[^0-9\-]+([\d\.]+)",
-                r"sales[^0-9\-]+([\d\.]+)",
-                r"operating income[^0-9\-]+([\d\.]+)",
-                r"income from operations[^0-9\-]+([\d\.]+)"
+                r"REVENUE[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"Revenue[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"turnover[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"sales[^\d]{0,10}([\d]{3,}\.?\d*)"
             ],
             "profit": [
-                r"net (?:result|income|profit)[^0-9\-]+([\d\.]+)",
-                r"profit / loss[^0-9\-]+([\d\.]+)",
-                r"result for the year[^0-9\-]+([\d\.]+)"
+                r"PROFIT\s*/\s*LOSS\s*OF\s*THE\s*PERIOD[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"net\s*(?:result|income|profit)[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"profit\s*/\s*loss[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"result\s*for\s*the\s*year[^\d]{0,10}([\d]{3,}\.?\d*)"
             ],
             "assets": [
-                r"total assets[^0-9\-]+([\d\.]+)",
-                r"as at [A-Za-z]+\s?\d{4}[\s:]*([\d\.]+)",
-                r"assets[^0-9\-]+([\d\.]+)"
+                r"TOTAL\s+ASSETS[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"Total\s+Assets[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"ASSETS[^\d]{0,10}([\d]{3,}\.?\d*)"
             ],
             "equity": [
-                r"(?:shareholders'? )?equity[^0-9\-]+([\d\.]+)",
-                r"total equity[^0-9\-]+([\d\.]+)"
+                r"TOTAL\s+EQUITY[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"Equity\s+Attributable[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"(?:Shareholders'|Owners'|Parent\s+Company)\s+Equity[^\d]{0,10}([\d]{3,}\.?\d*)"
             ],
             "debt": [
-                r"liabilities[^0-9\-]+([\d\.]+)",
-                r"borrowings[^0-9\-]+([\d\.]+)",
-                r"loans[^0-9\-]+([\d\.]+)",
-                r"financial debt[^0-9\-]+([\d\.]+)"
+                r"TOTAL\s+LIABILITIES[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"Borrowings\s+and\s+lease\s+liabilities[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"liabilities[^\d]{0,10}([\d]{3,}\.?\d*)",
+                r"Debt[^\d]{0,10}([\d]{3,}\.?\d*)"
             ],
         }
+
 
         data = {key: find_value(patterns[key], text) for key in patterns}
 
