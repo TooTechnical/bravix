@@ -1,3 +1,11 @@
+"""
+Bravix – File Upload and Financial Parsing Route
+------------------------------------------------
+Handles uploads of financial documents (PDF, Excel, CSV, DOCX)
+and extracts both raw text and initial financial indicators
+for AI analysis.
+"""
+
 import io, re, pandas as pd
 from fastapi import APIRouter, UploadFile, File, HTTPException, Header
 from PyPDF2 import PdfReader
@@ -5,55 +13,87 @@ from docx import Document
 
 router = APIRouter()
 
+
 def extract_indicators_from_text(text: str):
     """
-    Lightweight pattern extractor — pulls key values from PDF text to estimate
-    common financial ratios for GPT-5 analysis.
+    Improved pattern extractor for Bravix AI:
+    Handles multi-line PDFs, irregular number spacing, and common accounting phrases.
     """
     indicators = {}
 
-    # Normalize text for pattern matching
-    clean = text.replace(",", "").upper()
+    # Normalize text for easier pattern matching
+    clean = re.sub(r"\s+", " ", text.upper())
 
-    def find(pattern):
-        m = re.search(pattern, clean)
-        return float(m.group(1)) if m else None
+    # Helper to locate a number following a keyword
+    def find_number(keyword):
+        pattern = rf"{keyword}[:\s]+([\d]+[\d\s\.\,]*)"
+        match = re.search(pattern, clean)
+        if match:
+            num_str = match.group(1).replace(",", "").replace(" ", "")
+            try:
+                return float(num_str)
+            except ValueError:
+                return None
+        return None
 
-    # Try to extract rough numeric indicators
-    revenue = find(r"REVENUE\s+([\d\.]+)") or find(r"TOTAL REVENUE\s+([\d\.]+)")
-    profit = find(r"PROFIT\s*/\s*\(LOSS\).*?([\d\.]+)")
-    assets = find(r"TOTAL ASSETS\s+([\d\.]+)")
-    equity = find(r"TOTAL EQUITY\s+([\d\.]+)")
-    liabilities = find(r"TOTAL LIABILITIES\s+([\d\.]+)") or None
-    ebitda = find(r"EBITDA\s+BEFORE.*?([\d\.]+)") or find(r"EBITDA\s+([\d\.]+)")
+    # Attempt to extract common metrics
+    revenue = (
+        find_number("REVENUE")
+        or find_number("TOTAL REVENUE")
+        or find_number("INCOME")
+        or find_number("NET SALES")
+    )
+    profit = (
+        find_number("PROFIT")
+        or find_number("NET INCOME")
+        or find_number("RESULT OF THE PERIOD")
+        or find_number("NET RESULT")
+    )
+    assets = find_number("TOTAL ASSETS") or find_number("ASSETS")
+    equity = find_number("TOTAL EQUITY") or find_number("EQUITY ATTRIBUTABLE TO OWNERS")
+    liabilities = find_number("TOTAL LIABILITIES") or find_number("LIABILITIES")
+    ebitda = find_number("EBITDA") or find_number("OPERATING INCOME") or find_number("EBIT")
 
-    # Compute simple ratios if data available
+    # Compute derived ratios where possible
     try:
+        if revenue and profit:
+            indicators["net_profit_margin"] = round((profit / revenue) * 100, 2)
         if assets and equity:
             indicators["debt_ratio"] = round((assets - equity) / assets, 3)
             indicators["debt_to_equity_ratio"] = round((assets - equity) / equity, 3)
-        if revenue and profit:
-            indicators["net_profit_margin"] = round((profit / revenue) * 100, 2)
         if ebitda and revenue:
             indicators["operating_profit_margin"] = round((ebitda / revenue) * 100, 2)
+        if profit and assets:
+            indicators["return_on_assets"] = round((profit / assets) * 100, 2)
+        if profit and equity:
+            indicators["return_on_equity"] = round((profit / equity) * 100, 2)
     except Exception:
         pass
 
-    # Always return a dictionary (even if empty)
+    # Include base metrics for GPT’s reference
+    indicators.update({
+        "revenue": revenue,
+        "profit": profit,
+        "assets": assets,
+        "equity": equity,
+        "liabilities": liabilities,
+        "ebitda": ebitda,
+    })
+
     return indicators
 
 
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...), x_api_key: str = Header(None)):
     """
-    Handles file uploads for Bravix AI Analyzer.
-    Extracts text + computes initial indicators.
+    Handles file uploads for the Bravix AI Financial Analyzer.
+    Extracts text and calculates basic indicators from PDF, DOCX, CSV, or Excel.
     """
     try:
         filename = file.filename.lower()
         contents = await file.read()
 
-        # --- Extract text ---
+        # --- Extract text based on file type ---
         if filename.endswith(".pdf"):
             pdf = PdfReader(io.BytesIO(contents))
             raw_text = " ".join(page.extract_text() or "" for page in pdf.pages)
@@ -69,15 +109,20 @@ async def upload_file(file: UploadFile = File(...), x_api_key: str = Header(None
         else:
             raw_text = contents.decode("utf-8", errors="ignore")
 
+        # --- Enforce safety limits for Vercel ---
         if len(raw_text) > 7000:
             raw_text = raw_text[:7000] + "\n\n[Text truncated for size limit]"
 
         if not raw_text.strip():
             raise ValueError("No readable content extracted from file.")
 
-        # --- Extract financial indicators automatically ---
+        # --- Extract financial indicators ---
         indicators = extract_indicators_from_text(raw_text)
 
+        print("✅ Parsed file successfully.")
+        print(f"📊 Extracted indicators: {indicators}")
+
+        # --- Return data for analysis route ---
         return {
             "status": "success",
             "message": "File parsed successfully",
@@ -88,7 +133,7 @@ async def upload_file(file: UploadFile = File(...), x_api_key: str = Header(None
         }
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid or unsupported file format: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid or unsupported file format: {str(e)}")
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"File parsing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"File parsing failed: {str(e)}")
