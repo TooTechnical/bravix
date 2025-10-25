@@ -39,68 +39,67 @@ def analyze_with_chatgpt(raw_text: str, indicators: dict, client: OpenAI = None)
         raw_text = "No extracted financial text available."
 
     # --- Build structured expert prompt ---
-    prompt = f"""
-You are a senior financial risk analyst. Evaluate this company’s financial health,
-liquidity, profitability, leverage, solvency, and creditworthiness.
+prompt = f"""
+You are a senior financial risk analyst at Bravix. 
+You must evaluate the company’s financial stability using the **official Bravix Credit Scoring Framework**, 
+which is based on 18 financial indicators and their normalized weights (sum of all weights = 1.0).
 
-Base your analysis on the extracted document data and the following 18 key financial indicators.
-For each indicator, compare the company's calculated value with the benchmark range and identify whether it is Healthy, Weak, or Concerning.
+Each indicator is rated A–E:
+A = 5 points (Excellent)
+B = 4 points (Good)
+C = 3 points (Average)
+D = 2 points (Weak)
+E = 1 point (Critical)
+
+--- WEIGHTING TABLE (wᵢ) ---
+1. Current Ratio (0.08)
+2. Quick Ratio (0.08)
+3. Cash Ratio (0.08)
+4. Debt-to-Equity Ratio (0.10)
+5. Debt Ratio (0.10)
+6. Interest Coverage Ratio (0.10)
+7. Gross Profit Margin (0.05)
+8. Operating Profit Margin (0.05)
+9. Net Profit Margin (0.05)
+10. Return on Assets (ROA) (0.05)
+11. Return on Equity (ROE) (0.05)
+12. Return on Investment (ROI) (0.05)
+13. Asset Turnover Ratio (0.05)
+14. Inventory Turnover (0.05)
+15. Accounts Receivable Turnover (0.05)
+16. Earnings Per Share (EPS) (0.025)
+17. Price-to-Earnings Ratio (P/E) (0.025)
+18. Altman Z-Score (0.06)
+
+The **overall credit score** is calculated as:
+Score = Σ (wᵢ × sᵢ), where sᵢ ∈ [1–5]
 
 --- EXTRACTED DOCUMENT DATA ---
 {raw_text[:2500]}
 
---- COMPUTED FINANCIAL INDICATORS (with expected healthy ranges) ---
-1. Current Ratio = {indicators.get('current_ratio')} (Healthy: 1.5–2.0)
-2. Quick Ratio = {indicators.get('quick_ratio')} (Healthy: 1.0–1.5)
-3. Absolute Liquidity Ratio = {indicators.get('absolute_liquidity_ratio')} (≥ 0.2)
-4. Inventory Turnover Ratio = {indicators.get('inventory_turnover_ratio')} (5–10)
-5. Receivables Turnover Ratio = {indicators.get('receivables_turnover_ratio')} (5–12)
-6. Asset Turnover = {indicators.get('asset_turnover')} (1–2)
-7. DSO (Days Sales Outstanding) = {indicators.get('dso')} (≤ 30–45 days)
-8. Net Profit Margin = {indicators.get('net_profit_margin')}% (≥ 10%)
-9. Return on Assets (ROA) = {indicators.get('roa')}% (≥ 5–10%)
-10. Return on Equity (ROE) = {indicators.get('roe')}% (≥ 15%)
-11. Equity Ratio = {indicators.get('equity_ratio')}% (≥ 50%)
-12. Debt-to-Income Ratio (DTI) = {indicators.get('dti')}% (≤ 30–40%)
-13. Debt Service Coverage Ratio (DSCR) = {indicators.get('dscr')} (≥ 1.5)
-14. Return on Investment (ROI) = {indicators.get('roi')}% (≥ 15%)
-15. Working Capital = {indicators.get('working_capital')} (Positive)
-16. Efficiency Ratio = {indicators.get('efficiency_ratio')} (≥ 1.5)
-17. Debt-to-EBITDA = {indicators.get('debt_to_ebitda')} (≤ 3.5)
-18. DSCR (EBIT-based) = {indicators.get('dscr_ebit')} (≥ 1.2)
+--- COMPUTED INDICATORS ---
+{json.dumps(indicators, indent=2)}
 
---- READINESS SCORE ---
-Overall Readiness Score = {indicators.get('readiness_score')}/100
+Your task:
+1. Evaluate each indicator and assign a grade (A–E) based on how the company compares to healthy ranges.
+2. Compute the weighted credit score (1–5 scale).
+3. Classify the company into one of five categories:
+   - Excellent (4.5–5.0)
+   - Good (3.8–4.49)
+   - Average (3.0–3.79)
+   - Weak (2.0–2.99)
+   - Critical (below 2.0)
+4. Provide a clear explanation of *why* the company fits that category.
 
-Please analyze and respond using this structured format:
+Return your analysis in this structure:
 
-**Overview:**
-Summarize the company’s overall financial condition and data reliability.
-
-**Indicator Comparison:**
-Briefly comment on how each ratio compares to its healthy range.
-
-**Strengths:**
-Highlight strong financial areas.
-
-**Weaknesses / Risk Factors:**
-Identify metrics or trends that increase risk.
-
-**Liquidity Assessment:**
-Assess the company’s short-term solvency.
-
-**Profitability Assessment:**
-Evaluate returns and efficiency.
-
-**Solvency / Leverage Assessment:**
-Comment on long-term debt exposure and resilience.
-
-**Credit Decision Summary:**
-Provide:
-- Loan Recommendation (Approve / Review / Reject)
-- Risk Level (Low / Medium / High)
-- Risk Score (0–100)
-- Final Summary (2–3 sentences of reasoning)
+**Overview:** (short paragraph)
+**Indicator Ratings:** (A–E per indicator)
+**Weighted Credit Score:** (show numeric score)
+**Risk Category:** (Excellent / Good / Average / Weak / Critical)
+**Key Strengths:** (3–5 bullet points)
+**Key Weaknesses:** (3–5 bullet points)
+**Final Credit Decision:** (Approve / Review / Reject)
 """
 
     # ✅ Try GPT-5 first, fallback to GPT-4o
