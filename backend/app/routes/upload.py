@@ -6,10 +6,12 @@ and extracts both raw text and initial financial indicators
 for AI analysis.
 """
 
-import io, re, pandas as pd
+import io
+import re
+import pandas as pd
 from fastapi import APIRouter, UploadFile, File, HTTPException, Header
-from PyPDF2 import PdfReader
 from docx import Document
+from pdfminer.high_level import extract_text  # ✅ replaces PyPDF2
 
 router = APIRouter()
 
@@ -20,11 +22,8 @@ def extract_indicators_from_text(text: str):
     Handles multi-line PDFs, irregular number spacing, and common accounting phrases.
     """
     indicators = {}
-
-    # Normalize text for easier pattern matching
     clean = re.sub(r"\s+", " ", text.upper())
 
-    # Helper to locate a number following a keyword
     def find_number(keyword):
         pattern = rf"{keyword}[:\s]+([\d]+[\d\s\.\,]*)"
         match = re.search(pattern, clean)
@@ -36,7 +35,6 @@ def extract_indicators_from_text(text: str):
                 return None
         return None
 
-    # Attempt to extract common metrics
     revenue = (
         find_number("REVENUE")
         or find_number("TOTAL REVENUE")
@@ -54,7 +52,6 @@ def extract_indicators_from_text(text: str):
     liabilities = find_number("TOTAL LIABILITIES") or find_number("LIABILITIES")
     ebitda = find_number("EBITDA") or find_number("OPERATING INCOME") or find_number("EBIT")
 
-    # Compute derived ratios where possible
     try:
         if revenue and profit:
             indicators["net_profit_margin"] = round((profit / revenue) * 100, 2)
@@ -70,7 +67,6 @@ def extract_indicators_from_text(text: str):
     except Exception:
         pass
 
-    # Include base metrics for GPT’s reference
     indicators.update({
         "revenue": revenue,
         "profit": profit,
@@ -79,7 +75,6 @@ def extract_indicators_from_text(text: str):
         "liabilities": liabilities,
         "ebitda": ebitda,
     })
-
     return indicators
 
 
@@ -95,8 +90,7 @@ async def upload_file(file: UploadFile = File(...), x_api_key: str = Header(None
 
         # --- Extract text based on file type ---
         if filename.endswith(".pdf"):
-            pdf = PdfReader(io.BytesIO(contents))
-            raw_text = " ".join(page.extract_text() or "" for page in pdf.pages)
+            raw_text = extract_text(io.BytesIO(contents)) or ""
         elif filename.endswith(".docx"):
             doc = Document(io.BytesIO(contents))
             raw_text = "\n".join(p.text for p in doc.paragraphs)
@@ -122,7 +116,6 @@ async def upload_file(file: UploadFile = File(...), x_api_key: str = Header(None
         print("✅ Parsed file successfully.")
         print(f"📊 Extracted indicators: {indicators}")
 
-        # --- Return data for analysis route ---
         return {
             "status": "success",
             "message": "File parsed successfully",
@@ -134,6 +127,5 @@ async def upload_file(file: UploadFile = File(...), x_api_key: str = Header(None
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid or unsupported file format: {str(e)}")
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File parsing failed: {str(e)}")

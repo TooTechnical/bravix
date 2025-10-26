@@ -9,4 +9,3 @@ python-docx
 openpyxl
 Pillow
 requests
-PyPDF2
