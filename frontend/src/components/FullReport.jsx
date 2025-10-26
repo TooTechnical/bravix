@@ -1,4 +1,5 @@
 import React from "react";
+import ScoreChart from "./ScoreChart";
 
 /**
  * FullReport Component
@@ -26,9 +27,19 @@ export default function FullReport({ report = {}, onDownload }) {
     scores = {},
     summary = {},
     final_evaluation = {},
+    quantitative_breakdown = {},
   } = report;
 
   const { weighted_credit_score, evaluation_score, risk_category, credit_decision } = scores;
+
+  // 🧮 Extract chart data (auto-detect key metrics)
+  const chartData = {
+    Liquidity: quantitative_breakdown?.Liquidity?.score || 3.0,
+    Leverage: quantitative_breakdown?.Leverage?.score || 3.0,
+    Profitability: quantitative_breakdown?.Profitability?.score || 3.0,
+    Efficiency: quantitative_breakdown?.Efficiency?.score || 3.0,
+    Solvency: quantitative_breakdown?.Solvency?.score || 3.0,
+  };
 
   return (
     <div
@@ -37,7 +48,7 @@ export default function FullReport({ report = {}, onDownload }) {
     >
       {/* Header */}
       <h2 className="text-3xl font-bold text-gray-900 mb-2">
-        Company Analysis Report
+        {company_name || "Company Analysis Report"}
       </h2>
       <p className="text-sm text-gray-500 mb-6">
         Analysis generated on{" "}
@@ -160,9 +171,12 @@ export default function FullReport({ report = {}, onDownload }) {
         </div>
       </section>
 
+      {/* Score Chart Visualization */}
+      <ScoreChart scores={chartData} />
+
       {/* Download Button */}
       {onDownload && (
-        <div className="text-center">
+        <div className="text-center mt-8">
           <button
             onClick={onDownload}
             className="bg-indigo-700 text-white px-5 py-2 rounded-lg shadow hover:bg-indigo-800 transition"
