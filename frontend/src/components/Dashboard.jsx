@@ -3,12 +3,13 @@ import { jsPDF } from "jspdf";
 import ReactMarkdown from "react-markdown";
 import { uploadFile, analyzeData } from "../bravixApi";
 
-// 🧩 Import Braivix report components
+// 🧩 Braivix Report Component
 import FullReport from "./FullReport";
 
 export default function Dashboard() {
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
+  const [report, setReport] = useState(null); // 👈 structured JSON report
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -23,6 +24,7 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setReport(null);
 
     try {
       // Step 1️⃣ Upload to backend
@@ -31,9 +33,11 @@ export default function Dashboard() {
       if (!parsed || Object.keys(parsed).length === 0)
         throw new Error("Upload succeeded but no parsed data was returned.");
 
-      // Step 2️⃣ Run GPT analysis
+      // Step 2️⃣ Run GPT-5 analysis
       const analyzeRes = await analyzeData(parsed, parsed.raw_text || "");
+      console.log("✅ AI analysis response:", analyzeRes);
       setResult(analyzeRes);
+      setReport(analyzeRes.structured_report || {});
     } catch (err) {
       console.error("AI analysis error:", err);
       setError(err.message || "Something went wrong during analysis.");
@@ -42,7 +46,7 @@ export default function Dashboard() {
     }
   }
 
-  // 🧾 PDF export for investors
+  // 🧾 PDF export
   function handleDownloadReport() {
     const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
     doc.setFont("times", "bold");
@@ -51,9 +55,11 @@ export default function Dashboard() {
 
     doc.setFont("times", "normal");
     doc.setFontSize(12);
-    const reportText = JSON.stringify(result, null, 2);
+
+    const reportText = result?.ai_analysis || "No analysis content available.";
     const splitText = doc.splitTextToSize(reportText, 520);
     doc.text(splitText, 40, 90);
+
     doc.save("Braivix-Financial-Report.pdf");
   }
 
@@ -170,26 +176,41 @@ export default function Dashboard() {
             padding: "2rem",
           }}
         >
-          {/* Render the structured AI Report */}
-          <FullReport data={result} />
-
-          <div style={{ textAlign: "center", marginTop: "2rem" }}>
-            <button
-              onClick={handleDownloadReport}
-              style={{
-                backgroundColor: "#0C2340",
-                color: "white",
-                fontWeight: "600",
-                padding: "12px 24px",
-                borderRadius: "8px",
-                border: "none",
-                cursor: "pointer",
-                fontFamily: "'Inter', sans-serif",
-              }}
-            >
-              ⬇️ Download Report (PDF)
-            </button>
-          </div>
+          {report && Object.keys(report).length > 0 ? (
+            <FullReport report={report} onDownload={handleDownloadReport} />
+          ) : (
+            <>
+              <h3 style={{ fontSize: "1.5rem", fontWeight: "600", color: "#0C2340" }}>
+                AI Financial Report
+              </h3>
+              <ReactMarkdown
+                children={result.ai_analysis || "No structured report available."}
+                style={{
+                  color: "#1F2937",
+                  lineHeight: "1.6",
+                  fontFamily: "'Inter', sans-serif",
+                  marginTop: "1rem",
+                }}
+              />
+              <div style={{ textAlign: "center", marginTop: "2rem" }}>
+                <button
+                  onClick={handleDownloadReport}
+                  style={{
+                    backgroundColor: "#0C2340",
+                    color: "white",
+                    fontWeight: "600",
+                    padding: "12px 24px",
+                    borderRadius: "8px",
+                    border: "none",
+                    cursor: "pointer",
+                    fontFamily: "'Inter', sans-serif",
+                  }}
+                >
+                  ⬇️ Download Report (PDF)
+                </button>
+              </div>
+            </>
+          )}
         </section>
       )}
 
@@ -203,7 +224,7 @@ export default function Dashboard() {
           fontFamily: "'Inter', sans-serif",
         }}
       >
-        © {new Date().getFullYear()} Braivix — AI-Assisted Financial Intelligence
+        © {new Date().getFullYear()} Braivix AI-Assisted Financial Intelligence
       </footer>
     </div>
   );
