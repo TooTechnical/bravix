@@ -1,62 +1,175 @@
 import React from "react";
-import ScoreSummaryCard from "./ScoreSummaryCard";
-import IndicatorBreakdown from "./IndicatorBreakdown";
-import StressTestCard from "./StressTestCard";
-import AnalystMetricsGrid from "./AnalystMetricsGrid";
-import StrategicActions from "./StrategicActions";
 
-export default function FullReport({ data }) {
-  if (!data) {
-    return <div style={{ textAlign: "center", color: "#6B7280" }}>No data available.</div>;
+/**
+ * FullReport Component
+ * --------------------
+ * Displays a clean, institutional-grade company analysis report
+ * using the structured JSON returned by the backend.
+ *
+ * Props:
+ * - report (object): structured_report from the backend response
+ * - onDownload (function): optional callback for PDF download
+ */
+
+export default function FullReport({ report = {}, onDownload }) {
+  if (!report || Object.keys(report).length === 0) {
+    return (
+      <div className="text-center text-gray-500 mt-8">
+        No report data available. Please upload a financial document and analyze it.
+      </div>
+    );
   }
 
   const {
     company_name,
     analysis_timestamp,
-    scores,
-    summary,
-    quantitative_breakdown,
-    stress_test,
-    analyst_metrics,
-    strategic_implications,
-    final_evaluation,
-  } = data;
+    scores = {},
+    summary = {},
+    final_evaluation = {},
+  } = report;
+
+  const { weighted_credit_score, evaluation_score, risk_category, credit_decision } = scores;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+    <div
+      className="w-full max-w-4xl mx-auto mt-10 bg-white text-gray-800 rounded-2xl shadow-md p-8 border border-gray-200"
+      style={{ fontFamily: "'Inter', sans-serif" }}
+    >
       {/* Header */}
-      <div style={{ borderBottom: "1px solid #E5E7EB", paddingBottom: "1rem" }}>
-        <h2 style={{ fontSize: "1.75rem", fontWeight: "700", color: "#0C2340" }}>
-          {company_name || "Company Analysis Report"}
-        </h2>
-        <p style={{ color: "#6B7280", fontSize: "0.9rem" }}>
-          Analysis generated on {new Date(analysis_timestamp).toLocaleString()}
-        </p>
-      </div>
+      <h2 className="text-3xl font-bold text-gray-900 mb-2">
+        Company Analysis Report
+      </h2>
+      <p className="text-sm text-gray-500 mb-6">
+        Analysis generated on{" "}
+        {analysis_timestamp
+          ? new Date(analysis_timestamp).toLocaleDateString()
+          : "Unavailable"}
+      </p>
 
-      {/* Score Summary */}
-      <ScoreSummaryCard
-        weightedScore={scores?.weighted_credit_score}
-        evaluationScore={scores?.evaluation_score}
-        riskCategory={scores?.risk_category}
-        creditDecision={scores?.credit_decision}
-        summary={summary}
-      />
+      {/* Credit Summary */}
+      <section className="bg-gray-50 rounded-xl p-6 mb-8 border border-gray-200">
+        <h3 className="text-xl font-semibold text-gray-800 mb-4">
+          Credit Evaluation Summary
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+          <div>
+            <p className="text-sm text-gray-500">Weighted Credit Score</p>
+            <p className="text-2xl font-semibold text-gray-900">
+              {weighted_credit_score || "-"}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Evaluation Score</p>
+            <p className="text-2xl font-semibold text-gray-900">
+              {evaluation_score ? `${evaluation_score} / 100` : "- / 100"}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Risk Category</p>
+            <p
+              className={`text-2xl font-semibold ${
+                risk_category === "Excellent"
+                  ? "text-green-600"
+                  : risk_category === "Good"
+                  ? "text-green-500"
+                  : risk_category === "Average"
+                  ? "text-yellow-500"
+                  : risk_category === "Weak"
+                  ? "text-orange-500"
+                  : "text-red-600"
+              }`}
+            >
+              {risk_category || "-"}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Credit Decision</p>
+            <p className="text-2xl font-semibold text-gray-900">
+              {credit_decision || "-"}
+            </p>
+          </div>
+        </div>
+      </section>
 
-      {/* Indicator Breakdown */}
-      {quantitative_breakdown && quantitative_breakdown.length > 0 && (
-        <IndicatorBreakdown breakdown={quantitative_breakdown} />
+      {/* Executive Overview */}
+      {summary?.executive_overview && (
+        <section className="mb-8">
+          <h3 className="text-xl font-semibold mb-2 text-gray-800">
+            Executive Overview
+          </h3>
+          <p className="text-gray-700 leading-relaxed">
+            {summary.executive_overview}
+          </p>
+        </section>
       )}
 
-      {/* Stress Test */}
-      {stress_test && <StressTestCard stress={stress_test} />}
+      {/* Strengths and Weaknesses */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+        <div>
+          <h4 className="text-lg font-semibold text-green-700 mb-2">
+            Key Strengths
+          </h4>
+          <ul className="list-disc list-inside text-gray-700 space-y-1">
+            {(summary.primary_strengths || []).map((item, i) => (
+              <li key={i}>{item}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h4 className="text-lg font-semibold text-red-700 mb-2">
+            Key Weaknesses
+          </h4>
+          <ul className="list-disc list-inside text-gray-700 space-y-1">
+            {(summary.primary_weaknesses || []).map((item, i) => (
+              <li key={i}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </section>
 
-      {/* Analyst Metrics */}
-      {analyst_metrics && <AnalystMetricsGrid metrics={analyst_metrics} />}
+      {/* Final Evaluation */}
+      <section className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-8">
+        <h3 className="text-xl font-semibold text-gray-800 mb-3">
+          Final Evaluation Summary
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+          <div>
+            <p className="text-sm text-gray-500">Weighted Score</p>
+            <p className="text-lg font-semibold text-gray-800">
+              {final_evaluation.weighted_credit_score || "-"}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Evaluation</p>
+            <p className="text-lg font-semibold text-gray-800">
+              {final_evaluation.evaluation_score || "-"}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Risk</p>
+            <p className="text-lg font-semibold text-gray-800">
+              {final_evaluation.risk_category || "-"}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Decision</p>
+            <p className="text-lg font-semibold text-gray-800">
+              {final_evaluation.credit_decision || "-"}
+            </p>
+          </div>
+        </div>
+      </section>
 
-      {/* Strategic Actions */}
-      {strategic_implications && (
-        <StrategicActions actions={strategic_implications} final={final_evaluation} />
+      {/* Download Button */}
+      {onDownload && (
+        <div className="text-center">
+          <button
+            onClick={onDownload}
+            className="bg-indigo-700 text-white px-5 py-2 rounded-lg shadow hover:bg-indigo-800 transition"
+          >
+            ⬇️ Download Report (PDF)
+          </button>
+        </div>
       )}
     </div>
   );

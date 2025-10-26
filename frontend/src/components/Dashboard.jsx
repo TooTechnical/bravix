@@ -9,7 +9,7 @@ import FullReport from "./FullReport";
 export default function Dashboard() {
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
-  const [report, setReport] = useState(null); // 👈 structured JSON report
+  const [report, setReport] = useState(null); // structured JSON report
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -36,6 +36,7 @@ export default function Dashboard() {
       // Step 2️⃣ Run GPT-5 analysis
       const analyzeRes = await analyzeData(parsed, parsed.raw_text || "");
       console.log("✅ AI analysis response:", analyzeRes);
+
       setResult(analyzeRes);
       setReport(analyzeRes.structured_report || {});
     } catch (err) {
@@ -74,12 +75,7 @@ export default function Dashboard() {
       }}
     >
       {/* HEADER */}
-      <header
-        style={{
-          textAlign: "center",
-          marginBottom: "2.5rem",
-        }}
-      >
+      <header style={{ textAlign: "center", marginBottom: "2.5rem" }}>
         <h1 style={{ fontSize: "2.3rem", fontWeight: "700", color: "#0C2340" }}>
           Braivix AI Credit Analysis Dashboard
         </h1>
@@ -224,7 +220,7 @@ export default function Dashboard() {
           fontFamily: "'Inter', sans-serif",
         }}
       >
-        © {new Date().getFullYear()} Braivix AI-Assisted Financial Intelligence
+        © {new Date().getFullYear()} Braivix — AI-Assisted Financial Intelligence
       </footer>
     </div>
   );
