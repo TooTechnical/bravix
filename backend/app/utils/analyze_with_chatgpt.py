@@ -5,7 +5,7 @@ Performs quantitative scoring, stress testing, and narrative reasoning
 to produce a full institutional-grade credit assessment report.
 """
 
-import os, json, math
+import os, json
 from openai import OpenAI
 
 # ----------------------------------------------------------------------
@@ -84,45 +84,17 @@ Weighted score computation (Σ wᵢ×sᵢ):
 --- TASK ---
 Write a professional, data-driven report with these sections:
 
-1. **Executive Summary** – Concise overview showing numeric score, evaluation (0–100),
-   credit decision, and one-sentence rationale.
-
-2. **Quantitative Breakdown Table**
-   - Liquidity, Leverage, Profitability, Efficiency, Solvency, Market.
-   - Include category averages, weight contribution %, and comments.
-
-3. **Analyst Commentary (Why)**
-   Explain key positive and negative drivers behind each major category.
-
-4. **Scenario Stress Test**
-   Model a case where revenue ↓10% and interest expense ↑15%.
-   Estimate the new weighted score and evaluation score impact (in % terms).
-
-5. **Benchmark Comparison**
-   Compare each key ratio to typical industry medians (infer where not supplied).
-   Discuss whether the company performs above or below peers.
-
-6. **Analyst Metrics Section**
-   Report the following advanced indicators (approximate where necessary):
-   - Liquidity Coverage Index
-   - Leverage Multiple (Debt / EBITDA)
-   - Profitability Spread (ROE – ROA)
-   - Solvency Cushion (Equity / Total Assets)
-   - Altman Z-Score Projection
-   Each with interpretation in one sentence.
-
-7. **Strategic Implications**
-   Outline 3–5 management actions that could raise the company’s
-   evaluation category within 12 months.
-
-8. **Final Evaluation Summary**
-   Weighted Credit Score: {results['weighted_credit_score']} / 5
-   Evaluation Score: {results['evaluation_score']} / 100
-   Risk Category: {results['risk_category']}
-   Credit Decision: {results['credit_decision']}
+1. Executive Summary
+2. Quantitative Breakdown Table
+3. Analyst Commentary (Why)
+4. Scenario Stress Test
+5. Benchmark Comparison
+6. Analyst Metrics Section
+7. Strategic Implications
+8. Final Evaluation Summary
 
 The tone must be formal, concise, and suitable for presentation to
-a credit committee or institutional investor. Avoid marketing language.
+a credit committee or institutional investor.
 """
 
     # ---------- model call ----------
@@ -138,13 +110,44 @@ a credit committee or institutional investor. Avoid marketing language.
                 max_tokens=1800,
             )
             text = completion.choices[0].message.content.strip()
+
             if text:
+                # Build structured data for frontend display
+                structured = {
+                    "company_name": "Auto-detected or uploaded entity",
+                    "analysis_timestamp": "auto",
+                    "scores": results,
+                    "summary": {
+                        "executive_overview": "Automatically generated financial health summary.",
+                        "primary_strengths": [
+                            "Strong equity and solvency ratios.",
+                            "Stable profitability margins."
+                        ],
+                        "primary_weaknesses": [
+                            "Liquidity coverage below optimal threshold.",
+                            "High leverage exposure."
+                        ],
+                    },
+                    "final_evaluation": {
+                        "weighted_credit_score": f"{results['weighted_credit_score']} / 5",
+                        "evaluation_score": f"{results['evaluation_score']} / 100",
+                        "risk_category": results["risk_category"],
+                        "credit_decision": results["credit_decision"],
+                    }
+                }
+
                 return {
                     "analysis_raw": text,
                     "scores": results,
+                    "structured_report": structured,
                 }
+
         except Exception as e:
             print(f"{model.upper()} failed: {e}")
             continue
 
-    return {"analysis_raw": "No analysis generated.", "scores": results}
+    return {
+        "analysis_raw": "No analysis generated.",
+        "scores": results,
+        "structured_report": {},
+    }
