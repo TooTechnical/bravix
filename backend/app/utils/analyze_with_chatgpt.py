@@ -1,4 +1,5 @@
 import os
+import json
 from openai import OpenAI
 
 def get_openai_client():
@@ -12,7 +13,6 @@ def get_openai_client():
     if not api_key:
         raise ValueError("❌ Missing OPENAI_API_KEY environment variable.")
 
-    # Log only the first 8 chars for safety
     print(f"🔑 OpenAI API key loaded (first 8 chars): {api_key[:8]}...")
     print(f"🌐 Using OpenAI Base URL: {base_url}")
 
@@ -39,7 +39,7 @@ def analyze_with_chatgpt(raw_text: str, indicators: dict, client: OpenAI = None)
         raw_text = "No extracted financial text available."
 
     # --- Build structured expert prompt ---
-prompt = f"""
+    prompt = f"""
 You are a senior financial risk analyst at Bravix. 
 You must evaluate the company’s financial stability using the **official Bravix Credit Scoring Framework**, 
 which is based on 18 financial indicators and their normalized weights (sum of all weights = 1.0).
@@ -114,8 +114,7 @@ Return your analysis in this structure:
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.4,
-                max_completion_tokens=1200 if model == "gpt-5" else None,
-                max_tokens=1200 if model == "gpt-4o" else None,
+                max_tokens=1200,
             )
 
             response_text = completion.choices[0].message.content.strip()
