@@ -1,16 +1,18 @@
 import React, { useState } from "react";
-import ReactMarkdown from "react-markdown";
 import { jsPDF } from "jspdf";
+import ReactMarkdown from "react-markdown";
 import { uploadFile, analyzeData } from "../bravixApi";
+
+// 🧩 Import Braivix report components
+import FullReport from "./FullReport";
 
 export default function Dashboard() {
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [showIndicators, setShowIndicators] = useState(false);
 
-  // 🧠 Handles file upload + AI analysis
+  // 📄 Upload + AI analyze workflow
   async function handleAIAnalyze(e) {
     e.preventDefault();
     if (!file) {
@@ -23,15 +25,13 @@ export default function Dashboard() {
     setResult(null);
 
     try {
-      // 1️⃣ Upload file to backend
+      // Step 1️⃣ Upload to backend
       const uploadRes = await uploadFile(file);
       const parsed = uploadRes.data || uploadRes.parsed_data || {};
-
-      if (!parsed || Object.keys(parsed).length === 0) {
+      if (!parsed || Object.keys(parsed).length === 0)
         throw new Error("Upload succeeded but no parsed data was returned.");
-      }
 
-      // 2️⃣ Analyze parsed data using AI
+      // Step 2️⃣ Run GPT analysis
       const analyzeRes = await analyzeData(parsed, parsed.raw_text || "");
       setResult(analyzeRes);
     } catch (err) {
@@ -42,92 +42,65 @@ export default function Dashboard() {
     }
   }
 
-  // ✅ Extract AI analysis text
-  const aiText =
-    result?.summary ||
-    result?.ai_analysis ||
-    result?.result?.summary ||
-    result?.result?.analysis ||
-    "";
-
-  // ✅ Extract 18 indicator data if present
-  const indicators = result?.financial_indicators || [];
-
-  // ✅ Extract risk score
-  const riskValue = result?.overall_health_score || null;
-
-  function getStatusColor(status) {
-    switch (status) {
-      case "good":
-        return "#10b981"; // green
-      case "caution":
-        return "#f59e0b"; // orange
-      case "poor":
-        return "#dc2626"; // red
-      default:
-        return "#6b7280"; // grey
-    }
-  }
-
-  // 🧾 Generate downloadable PDF
+  // 🧾 PDF export for investors
   function handleDownloadReport() {
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "pt",
-      format: "a4",
-    });
+    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+    doc.setFont("times", "bold");
+    doc.setFontSize(20);
+    doc.text("Braivix Credit Intelligence Report", 40, 60);
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text("Bravix AI Financial Report", 40, 50);
-
-    doc.setFont("helvetica", "normal");
+    doc.setFont("times", "normal");
     doc.setFontSize(12);
-    const splitText = doc.splitTextToSize(aiText || "No report data available.", 520);
+    const reportText = JSON.stringify(result, null, 2);
+    const splitText = doc.splitTextToSize(reportText, 520);
     doc.text(splitText, 40, 90);
-
-    if (riskValue !== null) {
-      doc.setFont("helvetica", "bold");
-      doc.text(`Overall Health Score: ${riskValue}/100`, 40, 750);
-    }
-
-    doc.save("Bravix-Financial-Report.pdf");
+    doc.save("Braivix-Financial-Report.pdf");
   }
 
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(180deg, #0F172A 0%, #1E293B 100%)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        fontFamily: "'Inter', sans-serif",
-        padding: "3rem 2rem",
-        color: "white",
+        backgroundColor: "#F5F7FA",
+        color: "#0C2340",
+        fontFamily: "'Merriweather', serif",
+        padding: "3rem 1rem",
       }}
     >
-      {/* Header */}
-      <header style={{ textAlign: "center", marginBottom: "2rem" }}>
-        <h1 style={{ fontSize: "2.5rem", fontWeight: "700", color: "#00FFD0" }}>
-          Bravix AI Financial Analyzer
+      {/* HEADER */}
+      <header
+        style={{
+          textAlign: "center",
+          marginBottom: "2.5rem",
+        }}
+      >
+        <h1 style={{ fontSize: "2.3rem", fontWeight: "700", color: "#0C2340" }}>
+          Braivix AI Credit Analysis Dashboard
         </h1>
-        <p style={{ color: "#CBD5E1", fontSize: "1.1rem", maxWidth: "600px", margin: "0 auto" }}>
-          Upload your company’s financial documents and let GPT-5 evaluate 18 key financial
-          indicators to generate a full credit risk report.
+        <p
+          style={{
+            color: "#4B5563",
+            fontSize: "1rem",
+            maxWidth: "600px",
+            margin: "0 auto",
+            fontFamily: "'Inter', sans-serif",
+          }}
+        >
+          Upload a company’s financial statement and let Braivix AI generate a full weighted credit
+          score, benchmark, and investment-grade analysis.
         </p>
       </header>
 
-      {/* Upload Panel */}
+      {/* UPLOAD PANEL */}
       <section
         style={{
-          background: "#1E293B",
-          padding: "2rem",
+          background: "#FFFFFF",
           borderRadius: "12px",
-          boxShadow: "0 4px 25px rgba(0, 0, 0, 0.3)",
-          width: "100%",
+          border: "1px solid #E5E7EB",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
+          padding: "2rem",
           maxWidth: "600px",
-          marginBottom: "2rem",
+          margin: "0 auto 3rem",
         }}
       >
         <form onSubmit={handleAIAnalyze} style={{ textAlign: "center" }}>
@@ -135,11 +108,12 @@ export default function Dashboard() {
             style={{
               display: "block",
               fontWeight: "600",
-              color: "#E2E8F0",
               marginBottom: "0.5rem",
+              color: "#1F2937",
+              fontFamily: "'Inter', sans-serif",
             }}
           >
-            Upload Financial Document (PDF, CSV, Excel, Word)
+            Upload Financial Document (PDF, Excel, CSV, Word)
           </label>
           <input
             type="file"
@@ -148,175 +122,88 @@ export default function Dashboard() {
             style={{
               display: "block",
               margin: "0 auto 1rem",
-              padding: "0.5rem",
+              padding: "0.6rem",
               width: "100%",
-              border: "1px solid #334155",
+              border: "1px solid #D1D5DB",
               borderRadius: "8px",
-              background: "#0F172A",
-              color: "#E2E8F0",
+              background: "#F9FAFB",
+              color: "#111827",
+              fontFamily: "'Inter', sans-serif",
             }}
           />
           <button
             type="submit"
             disabled={loading}
             style={{
-              background: "linear-gradient(90deg, #00C48C 0%, #00FFD0 100%)",
-              color: "#0F172A",
+              backgroundColor: "#0C2340",
+              color: "white",
               fontWeight: "600",
               padding: "12px 36px",
               borderRadius: "10px",
               border: "none",
               cursor: "pointer",
               width: "100%",
-              transition: "transform 0.2s ease, box-shadow 0.2s ease",
+              transition: "opacity 0.2s ease",
+              fontFamily: "'Inter', sans-serif",
+              opacity: loading ? 0.6 : 1,
             }}
           >
-            {loading ? "Analyzing with AI..." : "Upload & Analyze with AI"}
+            {loading ? "Analyzing..." : "Upload & Analyze"}
           </button>
         </form>
 
         {error && (
-          <div style={{ color: "#f87171", marginTop: "1rem", fontWeight: "500" }}>
-            {error}
-          </div>
+          <div style={{ color: "#B23A48", marginTop: "1rem", fontWeight: "500" }}>{error}</div>
         )}
       </section>
 
-      {/* Result Panel */}
-      {aiText && (
+      {/* REPORT PANEL */}
+      {result && (
         <section
           style={{
-            background: "#0F172A",
-            padding: "2rem",
+            background: "#FFFFFF",
             borderRadius: "14px",
-            boxShadow: "0 6px 30px rgba(0, 0, 0, 0.4)",
-            width: "100%",
-            maxWidth: "800px",
-            lineHeight: "1.7",
-            position: "relative",
+            border: "1px solid #E5E7EB",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+            maxWidth: "900px",
+            margin: "0 auto",
+            padding: "2rem",
           }}
         >
-          <h3 style={{ color: "#00FFD0", fontSize: "1.5rem", marginBottom: "1rem" }}>
-            AI Financial Report
-          </h3>
+          {/* Render the structured AI Report */}
+          <FullReport data={result} />
 
-          <ReactMarkdown>{aiText}</ReactMarkdown>
-
-          {/* Health Score Bar */}
-          {riskValue !== null && (
-            <div style={{ marginTop: "2rem" }}>
-              <strong>Overall Health Score: </strong>
-              <span
-                style={{
-                  fontWeight: "bold",
-                  color: riskValue >= 70 ? "#10b981" : riskValue >= 40 ? "#f59e0b" : "#dc2626",
-                }}
-              >
-                {riskValue}/100
-              </span>
-              <div
-                style={{
-                  width: "100%",
-                  height: "10px",
-                  background: "#1E293B",
-                  borderRadius: "5px",
-                  marginTop: "8px",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${riskValue}%`,
-                    height: "100%",
-                    background:
-                      riskValue >= 70 ? "#10b981" : riskValue >= 40 ? "#f59e0b" : "#dc2626",
-                    borderRadius: "5px",
-                    transition: "width 0.5s ease",
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Collapsible Indicator Summary */}
-          {indicators.length > 0 && (
-            <div style={{ marginTop: "2rem" }}>
-              <button
-                onClick={() => setShowIndicators(!showIndicators)}
-                style={{
-                  background: "linear-gradient(90deg, #00FFD0 0%, #00C48C 100%)",
-                  color: "#0F172A",
-                  fontWeight: "600",
-                  padding: "10px 20px",
-                  borderRadius: "8px",
-                  border: "none",
-                  cursor: "pointer",
-                  width: "100%",
-                  marginBottom: "1rem",
-                }}
-              >
-                {showIndicators ? "Hide Indicator Summary" : "Show 18 Indicator Summary"}
-              </button>
-
-              {showIndicators && (
-                <div
-                  style={{
-                    background: "#1E293B",
-                    borderRadius: "10px",
-                    padding: "1rem",
-                    overflowY: "auto",
-                    maxHeight: "400px",
-                  }}
-                >
-                  {indicators.map((item, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        padding: "0.5rem 0",
-                        borderBottom: "1px solid #334155",
-                      }}
-                    >
-                      <span>{item.name}</span>
-                      <span style={{ color: getStatusColor(item.status), fontWeight: "600" }}>
-                        {item.value !== null ? item.value : "N/A"} ({item.status})
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Download Button */}
-          <button
-            onClick={handleDownloadReport}
-            style={{
-              background: "linear-gradient(90deg, #00C48C 0%, #00FFD0 100%)",
-              color: "#0F172A",
-              fontWeight: "600",
-              padding: "10px 24px",
-              borderRadius: "8px",
-              border: "none",
-              cursor: "pointer",
-              marginTop: "1.5rem",
-              width: "100%",
-            }}
-          >
-            ⬇️ Download Report (PDF)
-          </button>
+          <div style={{ textAlign: "center", marginTop: "2rem" }}>
+            <button
+              onClick={handleDownloadReport}
+              style={{
+                backgroundColor: "#0C2340",
+                color: "white",
+                fontWeight: "600",
+                padding: "12px 24px",
+                borderRadius: "8px",
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "'Inter', sans-serif",
+              }}
+            >
+              ⬇️ Download Report (PDF)
+            </button>
+          </div>
         </section>
       )}
 
+      {/* FOOTER */}
       <footer
         style={{
           marginTop: "3rem",
-          fontSize: "0.9rem",
-          color: "#94A3B8",
           textAlign: "center",
+          fontSize: "0.9rem",
+          color: "#6B7280",
+          fontFamily: "'Inter', sans-serif",
         }}
       >
-        Prototype © Bravix – Powered by GPT-5
+        © {new Date().getFullYear()} Braivix — AI-Assisted Financial Intelligence
       </footer>
     </div>
   );
