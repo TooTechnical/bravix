@@ -1,131 +1,150 @@
-import os
-import json
-from openai import OpenAI
-
-def get_openai_client():
-    """
-    Creates an OpenAI client that automatically detects your environment.
-    Supports both the default OpenAI API and custom proxy URLs (like api.openai-proxy.com).
-    """
-    api_key = os.getenv("OPENAI_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-
-    if not api_key:
-        raise ValueError("❌ Missing OPENAI_API_KEY environment variable.")
-
-    print(f"🔑 OpenAI API key loaded (first 8 chars): {api_key[:8]}...")
-    print(f"🌐 Using OpenAI Base URL: {base_url}")
-
-    try:
-        client = OpenAI(api_key=api_key, base_url=base_url)
-        print("✅ OpenAI client initialized successfully.")
-        return client
-    except Exception as e:
-        print(f"⚠️ Failed to initialize OpenAI client: {e}")
-        raise
-
-
-def analyze_with_chatgpt(raw_text: str, indicators: dict, client: OpenAI = None):
-    """
-    Uses GPT-5 (preferred) or GPT-4o (fallback) to analyze financial risk
-    using the 18 key financial indicators.
-    """
-
-    # ✅ Ensure we have a working OpenAI client
-    if client is None:
-        client = get_openai_client()
-
-    if not raw_text or raw_text.strip() == "":
-        raw_text = "No extracted financial text available."
-
-    # --- Build structured expert prompt ---
-    prompt = f"""
-You are a senior financial risk analyst at Bravix. 
-You must evaluate the company’s financial stability using the **official Bravix Credit Scoring Framework**, 
-which is based on 18 financial indicators and their normalized weights (sum of all weights = 1.0).
-
-Each indicator is rated A–E:
-A = 5 points (Excellent)
-B = 4 points (Good)
-C = 3 points (Average)
-D = 2 points (Weak)
-E = 1 point (Critical)
-
---- WEIGHTING TABLE (wᵢ) ---
-1. Current Ratio (0.08)
-2. Quick Ratio (0.08)
-3. Cash Ratio (0.08)
-4. Debt-to-Equity Ratio (0.10)
-5. Debt Ratio (0.10)
-6. Interest Coverage Ratio (0.10)
-7. Gross Profit Margin (0.05)
-8. Operating Profit Margin (0.05)
-9. Net Profit Margin (0.05)
-10. Return on Assets (ROA) (0.05)
-11. Return on Equity (ROE) (0.05)
-12. Return on Investment (ROI) (0.05)
-13. Asset Turnover Ratio (0.05)
-14. Inventory Turnover (0.05)
-15. Accounts Receivable Turnover (0.05)
-16. Earnings Per Share (EPS) (0.025)
-17. Price-to-Earnings Ratio (P/E) (0.025)
-18. Altman Z-Score (0.06)
-
-The **overall credit score** is calculated as:
-Score = Σ (wᵢ × sᵢ), where sᵢ ∈ [1–5]
-
---- EXTRACTED DOCUMENT DATA ---
-{raw_text[:2500]}
-
---- COMPUTED INDICATORS ---
-{json.dumps(indicators, indent=2)}
-
-Your task:
-1. Evaluate each indicator and assign a grade (A–E) based on how the company compares to healthy ranges.
-2. Compute the weighted credit score (1–5 scale).
-3. Classify the company into one of five categories:
-   - Excellent (4.5–5.0)
-   - Good (3.8–4.49)
-   - Average (3.0–3.79)
-   - Weak (2.0–2.99)
-   - Critical (below 2.0)
-4. Provide a clear explanation of *why* the company fits that category.
-
-Return your analysis in this structure:
-
-**Overview:** (short paragraph)
-**Indicator Ratings:** (A–E per indicator)
-**Weighted Credit Score:** (show numeric score)
-**Risk Category:** (Excellent / Good / Average / Weak / Critical)
-**Key Strengths:** (3–5 bullet points)
-**Key Weaknesses:** (3–5 bullet points)
-**Final Credit Decision:** (Approve / Review / Reject)
+"""
+Braivix – AI Financial Analysis & Credit Evaluation
+---------------------------------------------------
+Performs quantitative scoring, stress testing, and narrative reasoning
+to produce a full institutional-grade credit assessment report.
 """
 
-    # ✅ Try GPT-5 first, fallback to GPT-4o
+import os, json, math
+from openai import OpenAI
+
+# ----------------------------------------------------------------------
+#  OpenAI client setup
+# ----------------------------------------------------------------------
+def get_openai_client():
+    api_key = os.getenv("OPENAI_API_KEY")
+    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    if not api_key:
+        raise ValueError("Missing OPENAI_API_KEY.")
+    return OpenAI(api_key=api_key, base_url=base_url)
+
+# ----------------------------------------------------------------------
+#  Core financial evaluation logic
+# ----------------------------------------------------------------------
+def compute_weighted_score(grades: dict):
+    """Σ(wᵢ×sᵢ) weighted credit score and derived metrics."""
+    weights = {
+        "current_ratio": 0.08, "quick_ratio": 0.08, "cash_ratio": 0.08,
+        "debt_to_equity_ratio": 0.10, "debt_ratio": 0.10, "interest_coverage_ratio": 0.10,
+        "gross_profit_margin": 0.05, "operating_profit_margin": 0.05, "net_profit_margin": 0.05,
+        "return_on_assets": 0.05, "return_on_equity": 0.05, "return_on_investment": 0.05,
+        "asset_turnover_ratio": 0.05, "inventory_turnover": 0.05, "accounts_receivable_turnover": 0.05,
+        "earnings_per_share": 0.025, "price_to_earnings_ratio": 0.025, "altman_z_score": 0.06
+    }
+
+    score = sum(weights[k] * grades.get(k, 3) for k in weights)
+    evaluation_score = round((score / 5) * 100, 1)
+
+    if evaluation_score >= 90:
+        category, decision = "Excellent", "Safe to Proceed"
+    elif evaluation_score >= 76:
+        category, decision = "Good", "Safe to Proceed"
+    elif evaluation_score >= 60:
+        category, decision = "Average", "Proceed with Caution"
+    elif evaluation_score >= 40:
+        category, decision = "Weak", "Not Recommended"
+    else:
+        category, decision = "Critical", "Decline"
+
+    return {
+        "weighted_credit_score": round(score, 2),
+        "evaluation_score": evaluation_score,
+        "risk_category": category,
+        "credit_decision": decision
+    }
+
+# ----------------------------------------------------------------------
+#  GPT-5 reasoning engine
+# ----------------------------------------------------------------------
+def analyze_with_chatgpt(raw_text: str, indicators: dict, grades: dict, client: OpenAI = None):
+    if client is None:
+        client = get_openai_client()
+    if not raw_text.strip():
+        raw_text = "No extracted financial text available."
+
+    results = compute_weighted_score(grades)
+
+    # ---------- prompt ----------
+    prompt = f"""
+You are a senior credit-risk analyst generating a **Detailed Credit Evaluation Report**.
+
+--- INPUTS ---
+Financial document excerpt (sanitized):
+{raw_text[:2000]}
+
+Computed indicator values:
+{json.dumps(indicators, indent=2)}
+
+Indicator grades (A–E → 5–1):
+{json.dumps(grades, indent=2)}
+
+Weighted score computation (Σ wᵢ×sᵢ):
+{results['weighted_credit_score']} / 5  → Evaluation Score {results['evaluation_score']} / 100
+
+--- TASK ---
+Write a professional, data-driven report with these sections:
+
+1. **Executive Summary** – Concise overview showing numeric score, evaluation (0–100),
+   credit decision, and one-sentence rationale.
+
+2. **Quantitative Breakdown Table**
+   - Liquidity, Leverage, Profitability, Efficiency, Solvency, Market.
+   - Include category averages, weight contribution %, and comments.
+
+3. **Analyst Commentary (Why)**
+   Explain key positive and negative drivers behind each major category.
+
+4. **Scenario Stress Test**
+   Model a case where revenue ↓10% and interest expense ↑15%.
+   Estimate the new weighted score and evaluation score impact (in % terms).
+
+5. **Benchmark Comparison**
+   Compare each key ratio to typical industry medians (infer where not supplied).
+   Discuss whether the company performs above or below peers.
+
+6. **Analyst Metrics Section**
+   Report the following advanced indicators (approximate where necessary):
+   - Liquidity Coverage Index
+   - Leverage Multiple (Debt / EBITDA)
+   - Profitability Spread (ROE – ROA)
+   - Solvency Cushion (Equity / Total Assets)
+   - Altman Z-Score Projection
+   Each with interpretation in one sentence.
+
+7. **Strategic Implications**
+   Outline 3–5 management actions that could raise the company’s
+   evaluation category within 12 months.
+
+8. **Final Evaluation Summary**
+   Weighted Credit Score: {results['weighted_credit_score']} / 5
+   Evaluation Score: {results['evaluation_score']} / 100
+   Risk Category: {results['risk_category']}
+   Credit Decision: {results['credit_decision']}
+
+The tone must be formal, concise, and suitable for presentation to
+a credit committee or institutional investor. Avoid marketing language.
+"""
+
+    # ---------- model call ----------
     for model in ["gpt-5", "gpt-4o"]:
         try:
-            print(f"\n🧠 Sending financial summary to {model.upper()}...\n{'-'*60}")
-
             completion = client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": "You are an expert financial and credit risk analyst."},
+                    {"role": "system", "content": "You are an institutional credit-risk analyst."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.4,
-                max_tokens=1200,
+                max_tokens=1800,
             )
-
-            response_text = completion.choices[0].message.content.strip()
-            if response_text:
-                print(f"✅ Analysis successfully generated using {model.upper()}.")
-                return {"analysis_raw": response_text}
-
+            text = completion.choices[0].message.content.strip()
+            if text:
+                return {
+                    "analysis_raw": text,
+                    "scores": results,
+                }
         except Exception as e:
-            print(f"⚠️ {model.upper()} failed: {e}")
+            print(f"{model.upper()} failed: {e}")
             continue
 
-    # ❌ If all attempts fail
-    print("❌ Both GPT models failed to return a response.")
-    return {"analysis_raw": "No analysis returned by GPT-5 or GPT-4o."}
+    return {"analysis_raw": "No analysis generated.", "scores": results}
