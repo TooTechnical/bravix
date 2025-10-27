@@ -37,7 +37,7 @@ def extract_financial_data_with_ai(raw_text: str):
     Use GPT to semantically extract key financial metrics (multi-language + table-aware).
     Automatically detects European number formatting and numeric columns from PDF text.
     """
-    client = get_gpt_client()
+    client = get_openai_client()
 
     # 🧹 Step 1: Pre-clean
     cleaned = (
