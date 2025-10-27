@@ -33,76 +33,90 @@ def get_openai_client():
 #  Step 1 – Smart AI-based financial extraction
 # -------------------------------------------------------------------
 def extract_financial_data_with_ai(raw_text: str):
-    """Use GPT-5/4o-mini to semantically extract and summarize numeric data from the report."""
-    client = get_openai_client()
+    """
+    Use GPT to semantically extract key financial metrics (multi-language + table-aware).
+    Automatically detects European number formatting and numeric columns from PDF text.
+    """
+    client = get_gpt_client()
 
+    # 🧹 Step 1: Pre-clean
+    cleaned = (
+        raw_text
+        .replace("(", "-")  # treat brackets as negative
+        .replace(")", "")
+        .replace(",", "")
+        .replace("  ", " ")
+        .replace(" ", " ")  # non-breaking space
+    )
+
+    # Insert a space between letters and digits (REVENUE4.1 -> REVENUE 4.1)
+    import re
+    cleaned = re.sub(r"([A-Za-z])(\d)", r"\1 \2", cleaned)
+    cleaned = re.sub(r"(\d)([A-Za-z])", r"\1 \2", cleaned)
+
+    # 🧠 Step 2: Prompt GPT-5/4o-mini with strong numeric extraction logic
     prompt = f"""
-    You are a multilingual financial analyst reading a company’s report.
+You are a multilingual financial data extraction engine.
 
-    Step 1: Extract the key financial metrics in numeric form (in millions if applicable):
-    {{
-      "company_name": "...",
-      "fiscal_year": "...",
-      "assets": ...,
-      "liabilities": ...,
-      "equity": ...,
-      "revenue": ...,
-      "profit": ...,
-      "ebitda": ...
-    }}
+The following text contains a company's financial report. Identify numeric values
+for these indicators, in **millions** where applicable:
 
-    Step 2: Write a **one-paragraph summary** describing what this report contains
-    (for example: "This report contains the 2024 annual consolidated statement of XYZ Group...").
+- assets
+- liabilities
+- equity
+- revenue (or total revenue / sales / income)
+- profit (or net income / result)
+- ebitda (or operating income)
 
-    Output must be strict JSON:
-    {{
-      "summary": "text",
-      "financials": {{
-        "company_name": "...",
-        "fiscal_year": "...",
-        "assets": ...,
-        "liabilities": ...,
-        "equity": ...,
-        "revenue": ...,
-        "profit": ...,
-        "ebitda": ...
-      }}
-    }}
+The text may use European notation (commas for decimals, spaces for thousands),
+and the words may appear in all caps or mixed case. Example formats include:
+"REVENUE 24963.9" or "ASSETS 77109.3" or "EBITDA 4865.3".
 
-    Text to analyze:
-    {raw_text[:9000]}
+If values appear multiple times (for 2023 and 2024), pick the **most recent period**.
+If a value is missing, set it to null.
+
+Return **only valid JSON**:
+{{
+  "company_name": "...",
+  "fiscal_year": "...",
+  "assets": ...,
+  "liabilities": ...,
+  "equity": ...,
+  "revenue": ...,
+  "profit": ...,
+  "ebitda": ...
+}}
+Text:
+{cleaned[:8500]}
     """
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a precise financial data extractor and summarizer."},
+                {"role": "system", "content": "You are a financial data parser specialized in numeric table extraction."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.1,
-            max_tokens=800,
+            max_tokens=700,
         )
 
-        content = response.choices[0].message.content.strip()
-        print("🧠 AI extraction raw output:", content)
-
-        return json.loads(content)
+        import json
+        text = response.choices[0].message.content.strip()
+        print("🧠 AI extraction raw output:", text)
+        return json.loads(text)
 
     except Exception as e:
         print("❌ AI extraction failed:", str(e))
         return {
-            "summary": "No summary generated.",
-            "financials": {
-                "company_name": None,
-                "fiscal_year": None,
-                "assets": None,
-                "liabilities": None,
-                "equity": None,
-                "revenue": None,
-                "profit": None,
-                "ebitda": None,
-            },
+            "company_name": None,
+            "fiscal_year": None,
+            "assets": None,
+            "liabilities": None,
+            "equity": None,
+            "revenue": None,
+            "profit": None,
+            "ebitda": None,
         }
 
 
