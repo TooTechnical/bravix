@@ -1,9 +1,9 @@
 """
-Braivix – File Upload and Financial Parsing Route
--------------------------------------------------
-Handles uploads of financial documents (PDF, Excel, CSV, DOCX)
-and extracts both raw text and initial financial indicators
-for AI analysis using hybrid (AI + regex) parsing.
+Braivix – File Upload and Financial Parsing Route (Enhanced Accuracy)
+---------------------------------------------------------------------
+Uses a 2-step AI pipeline:
+1️⃣ Extract numeric metrics from any-language financial reports.
+2️⃣ Provide both structured values + summarized context for analysis.
 """
 
 import io
@@ -22,7 +22,7 @@ router = APIRouter()
 # -------------------------------------------------------------------
 #  GPT client
 # -------------------------------------------------------------------
-def get_gpt_client():
+def get_openai_client():
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("Missing OPENAI_API_KEY environment variable")
@@ -30,20 +30,19 @@ def get_gpt_client():
 
 
 # -------------------------------------------------------------------
-#  AI-based financial extractor (multilingual)
+#  Step 1 – Smart AI-based financial extraction
 # -------------------------------------------------------------------
 def extract_financial_data_with_ai(raw_text: str):
-    """Use GPT to semantically extract key financial metrics (multi-language support)."""
-    client = get_gpt_client()
+    """Use GPT-5/4o-mini to semantically extract and summarize numeric data from the report."""
+    client = get_openai_client()
 
     prompt = f"""
-    You are a multilingual financial document parser.
-    Extract the following figures as **numeric values** only (in millions if mentioned),
-    using any language present in the text. If currency symbols are used (€, $, £),
-    convert to millions and remove commas.
+    You are a multilingual financial analyst reading a company’s report.
 
-    Return strictly JSON:
+    Step 1: Extract the key financial metrics in numeric form (in millions if applicable):
     {{
+      "company_name": "...",
+      "fiscal_year": "...",
       "assets": ...,
       "liabilities": ...,
       "equity": ...,
@@ -52,44 +51,66 @@ def extract_financial_data_with_ai(raw_text: str):
       "ebitda": ...
     }}
 
-    If any value is missing, set it to null.
+    Step 2: Write a **one-paragraph summary** describing what this report contains
+    (for example: "This report contains the 2024 annual consolidated statement of XYZ Group...").
 
-    Text excerpt:
-    {raw_text[:8000]}
+    Output must be strict JSON:
+    {{
+      "summary": "text",
+      "financials": {{
+        "company_name": "...",
+        "fiscal_year": "...",
+        "assets": ...,
+        "liabilities": ...,
+        "equity": ...,
+        "revenue": ...,
+        "profit": ...,
+        "ebitda": ...
+      }}
+    }}
+
+    Text to analyze:
+    {raw_text[:9000]}
     """
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a precise financial data extractor."},
+                {"role": "system", "content": "You are a precise financial data extractor and summarizer."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0,
-            max_tokens=400,
+            temperature=0.1,
+            max_tokens=800,
         )
 
-        text = response.choices[0].message.content.strip()
-        print("🧠 AI extraction raw output:", text)
-        return json.loads(text)
+        content = response.choices[0].message.content.strip()
+        print("🧠 AI extraction raw output:", content)
+
+        return json.loads(content)
 
     except Exception as e:
         print("❌ AI extraction failed:", str(e))
         return {
-            "assets": None,
-            "liabilities": None,
-            "equity": None,
-            "revenue": None,
-            "profit": None,
-            "ebitda": None,
+            "summary": "No summary generated.",
+            "financials": {
+                "company_name": None,
+                "fiscal_year": None,
+                "assets": None,
+                "liabilities": None,
+                "equity": None,
+                "revenue": None,
+                "profit": None,
+                "ebitda": None,
+            },
         }
 
 
 # -------------------------------------------------------------------
-#  Regex backup extractor
+#  Step 2 – Regex backup (for fallback)
 # -------------------------------------------------------------------
 def extract_indicators_from_text(text: str):
-    """Fallback pattern extractor for financial indicators."""
+    """Fallback pattern extractor (if GPT parsing fails)."""
     indicators = {}
     clean = re.sub(r"\s+", " ", text.upper())
 
@@ -104,32 +125,14 @@ def extract_indicators_from_text(text: str):
                 return None
         return None
 
-    revenue = (
-        find_number("REVENUE")
-        or find_number("TOTAL REVENUE")
-        or find_number("INCOME")
-        or find_number("NET SALES")
-    )
-    profit = (
-        find_number("PROFIT")
-        or find_number("NET INCOME")
-        or find_number("RESULT OF THE PERIOD")
-        or find_number("NET RESULT")
-    )
-    assets = find_number("TOTAL ASSETS") or find_number("ASSETS")
-    equity = find_number("TOTAL EQUITY") or find_number("EQUITY ATTRIBUTABLE TO OWNERS")
-    liabilities = find_number("TOTAL LIABILITIES") or find_number("LIABILITIES")
-    ebitda = find_number("EBITDA") or find_number("OPERATING INCOME") or find_number("EBIT")
-
-    indicators.update({
-        "revenue": revenue,
-        "profit": profit,
-        "assets": assets,
-        "equity": equity,
-        "liabilities": liabilities,
-        "ebitda": ebitda,
-    })
-    return indicators
+    return {
+        "revenue": find_number("REVENUE") or find_number("TOTAL REVENUE"),
+        "profit": find_number("PROFIT") or find_number("NET INCOME"),
+        "assets": find_number("ASSETS"),
+        "equity": find_number("EQUITY"),
+        "liabilities": find_number("LIABILITIES"),
+        "ebitda": find_number("EBITDA"),
+    }
 
 
 # -------------------------------------------------------------------
@@ -137,10 +140,7 @@ def extract_indicators_from_text(text: str):
 # -------------------------------------------------------------------
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...), x_api_key: str = Header(None)):
-    """
-    Handles file uploads for the Braivix AI Financial Analyzer.
-    Extracts text and calculates indicators via AI + regex fallback.
-    """
+    """Handles uploads for Braivix AI – extracts text, structured metrics, and summary."""
     try:
         filename = file.filename.lower()
         contents = await file.read()
@@ -161,27 +161,31 @@ async def upload_file(file: UploadFile = File(...), x_api_key: str = Header(None
             raw_text = contents.decode("utf-8", errors="ignore")
 
         # --- Limit text for Vercel ---
-        if len(raw_text) > 8000:
-            raw_text = raw_text[:8000] + "\n\n[Text truncated for size limit]"
+        if len(raw_text) > 9000:
+            raw_text = raw_text[:9000] + "\n\n[Text truncated for size limit]"
 
         if not raw_text.strip():
             raise ValueError("No readable content extracted from file.")
 
-        # --- Primary: GPT AI extraction ---
+        # --- Step 1: AI-based extraction ---
         ai_data = extract_financial_data_with_ai(raw_text)
-        print("✅ AI parsed financials:", ai_data)
+        financials = ai_data.get("financials", {})
+        summary = ai_data.get("summary", "")
 
-        # --- Fallback: Regex extraction if AI failed ---
-        if not any(ai_data.values()):
-            ai_data = extract_indicators_from_text(raw_text)
-            print("🔁 Fallback extraction used:", ai_data)
+        # --- Step 2: Regex fallback if missing ---
+        if not any(financials.values()):
+            financials = extract_indicators_from_text(raw_text)
+            print("🔁 Fallback extraction used:", financials)
+
+        print("✅ Final extracted financials:", financials)
 
         return {
             "status": "success",
             "message": "File parsed successfully",
             "data": {
                 "raw_text": raw_text,
-                "indicators": ai_data,
+                "summary": summary,
+                "indicators": financials,
             },
         }
 
