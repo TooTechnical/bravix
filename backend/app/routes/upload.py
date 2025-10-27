@@ -1,26 +1,92 @@
 """
-Bravix – File Upload and Financial Parsing Route
-------------------------------------------------
+Braivix – File Upload and Financial Parsing Route
+-------------------------------------------------
 Handles uploads of financial documents (PDF, Excel, CSV, DOCX)
 and extracts both raw text and initial financial indicators
-for AI analysis.
+for AI analysis using hybrid (AI + regex) parsing.
 """
 
 import io
 import re
+import os
+import json
 import pandas as pd
 from fastapi import APIRouter, UploadFile, File, HTTPException, Header
 from docx import Document
-from pdfminer.high_level import extract_text  # ✅ replaces PyPDF2
+from pdfminer.high_level import extract_text
+from openai import OpenAI
 
 router = APIRouter()
 
 
+# -------------------------------------------------------------------
+#  GPT client
+# -------------------------------------------------------------------
+def get_openai_client():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("Missing OPENAI_API_KEY environment variable")
+    return OpenAI(api_key=api_key)
+
+
+# -------------------------------------------------------------------
+#  AI-based extraction (multilingual)
+# -------------------------------------------------------------------
+def extract_financial_data_with_ai(raw_text: str):
+    """Use GPT to semantically extract key financial figures from text."""
+    client = get_openai_client()
+
+    prompt = f"""
+    You are a multilingual financial data extractor. Read the text and extract
+    key figures as **numbers only** (in millions if stated). Understand any
+    language (Dutch, French, German, Spanish, etc.) and always respond in JSON.
+
+    Required JSON keys:
+    {{
+      "assets": ...,
+      "liabilities": ...,
+      "equity": ...,
+      "revenue": ...,
+      "profit": ...,
+      "ebitda": ...
+    }}
+
+    If a value is missing or unclear, set it to null.
+    Text:
+    {raw_text[:7000]}
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a precise financial data extractor."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0,
+            max_tokens=400,
+        )
+
+        text = response.choices[0].message.content.strip()
+        print("🧠 AI extraction raw output:", text)
+        return json.loads(text)
+    except Exception as e:
+        print("❌ AI extraction failed:", str(e))
+        return {
+            "assets": None,
+            "liabilities": None,
+            "equity": None,
+            "revenue": None,
+            "profit": None,
+            "ebitda": None,
+        }
+
+
+# -------------------------------------------------------------------
+#  Regex backup (for non-numeric or corrupted text)
+# -------------------------------------------------------------------
 def extract_indicators_from_text(text: str):
-    """
-    Improved pattern extractor for Bravix AI:
-    Handles multi-line PDFs, irregular number spacing, and common accounting phrases.
-    """
+    """Backup pattern-based numeric extractor."""
     indicators = {}
     clean = re.sub(r"\s+", " ", text.upper())
 
@@ -52,21 +118,6 @@ def extract_indicators_from_text(text: str):
     liabilities = find_number("TOTAL LIABILITIES") or find_number("LIABILITIES")
     ebitda = find_number("EBITDA") or find_number("OPERATING INCOME") or find_number("EBIT")
 
-    try:
-        if revenue and profit:
-            indicators["net_profit_margin"] = round((profit / revenue) * 100, 2)
-        if assets and equity:
-            indicators["debt_ratio"] = round((assets - equity) / assets, 3)
-            indicators["debt_to_equity_ratio"] = round((assets - equity) / equity, 3)
-        if ebitda and revenue:
-            indicators["operating_profit_margin"] = round((ebitda / revenue) * 100, 2)
-        if profit and assets:
-            indicators["return_on_assets"] = round((profit / assets) * 100, 2)
-        if profit and equity:
-            indicators["return_on_equity"] = round((profit / equity) * 100, 2)
-    except Exception:
-        pass
-
     indicators.update({
         "revenue": revenue,
         "profit": profit,
@@ -78,17 +129,21 @@ def extract_indicators_from_text(text: str):
     return indicators
 
 
+# -------------------------------------------------------------------
+#  Upload route
+# -------------------------------------------------------------------
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...), x_api_key: str = Header(None)):
     """
-    Handles file uploads for the Bravix AI Financial Analyzer.
+    Handles file uploads for the Braivix AI Financial Analyzer.
     Extracts text and calculates basic indicators from PDF, DOCX, CSV, or Excel.
+    Combines AI + regex fallback to ensure every upload returns structured data.
     """
     try:
         filename = file.filename.lower()
         contents = await file.read()
 
-        # --- Extract text based on file type ---
+        # --- Extract text ---
         if filename.endswith(".pdf"):
             raw_text = extract_text(io.BytesIO(contents)) or ""
         elif filename.endswith(".docx"):
@@ -103,25 +158,28 @@ async def upload_file(file: UploadFile = File(...), x_api_key: str = Header(None
         else:
             raw_text = contents.decode("utf-8", errors="ignore")
 
-        # --- Enforce safety limits for Vercel ---
+        # --- Enforce safety limit for Vercel ---
         if len(raw_text) > 7000:
             raw_text = raw_text[:7000] + "\n\n[Text truncated for size limit]"
 
         if not raw_text.strip():
             raise ValueError("No readable content extracted from file.")
 
-        # --- Extract financial indicators ---
-        indicators = extract_indicators_from_text(raw_text)
+        # --- AI-based numeric extraction ---
+        ai_data = extract_financial_data_with_ai(raw_text)
+        print("✅ AI parsed financials:", ai_data)
 
-        print("✅ Parsed file successfully.")
-        print(f"📊 Extracted indicators: {indicators}")
+        # --- Regex backup if AI fails ---
+        if not any(ai_data.values()):
+            ai_data = extract_indicators_from_text(raw_text)
+            print("🔁 Fallback: Regex extraction used:", ai_data)
 
         return {
             "status": "success",
             "message": "File parsed successfully",
             "data": {
                 "raw_text": raw_text,
-                "indicators": indicators,
+                "indicators": ai_data,
             },
         }
 
