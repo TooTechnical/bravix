@@ -22,7 +22,7 @@ router = APIRouter()
 # -------------------------------------------------------------------
 #  GPT client
 # -------------------------------------------------------------------
-def get_openai_client():
+def get_gpt_client():
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("Missing OPENAI_API_KEY environment variable")
@@ -30,18 +30,19 @@ def get_openai_client():
 
 
 # -------------------------------------------------------------------
-#  AI-based extraction (multilingual)
+#  AI-based financial extractor (multilingual)
 # -------------------------------------------------------------------
 def extract_financial_data_with_ai(raw_text: str):
-    """Use GPT to semantically extract key financial figures from text."""
-    client = get_openai_client()
+    """Use GPT to semantically extract key financial metrics (multi-language support)."""
+    client = get_gpt_client()
 
     prompt = f"""
-    You are a multilingual financial data extractor. Read the text and extract
-    key figures as **numbers only** (in millions if stated). Understand any
-    language (Dutch, French, German, Spanish, etc.) and always respond in JSON.
+    You are a multilingual financial document parser.
+    Extract the following figures as **numeric values** only (in millions if mentioned),
+    using any language present in the text. If currency symbols are used (€, $, £),
+    convert to millions and remove commas.
 
-    Required JSON keys:
+    Return strictly JSON:
     {{
       "assets": ...,
       "liabilities": ...,
@@ -51,9 +52,10 @@ def extract_financial_data_with_ai(raw_text: str):
       "ebitda": ...
     }}
 
-    If a value is missing or unclear, set it to null.
-    Text:
-    {raw_text[:7000]}
+    If any value is missing, set it to null.
+
+    Text excerpt:
+    {raw_text[:8000]}
     """
 
     try:
@@ -70,6 +72,7 @@ def extract_financial_data_with_ai(raw_text: str):
         text = response.choices[0].message.content.strip()
         print("🧠 AI extraction raw output:", text)
         return json.loads(text)
+
     except Exception as e:
         print("❌ AI extraction failed:", str(e))
         return {
@@ -83,10 +86,10 @@ def extract_financial_data_with_ai(raw_text: str):
 
 
 # -------------------------------------------------------------------
-#  Regex backup (for non-numeric or corrupted text)
+#  Regex backup extractor
 # -------------------------------------------------------------------
 def extract_indicators_from_text(text: str):
-    """Backup pattern-based numeric extractor."""
+    """Fallback pattern extractor for financial indicators."""
     indicators = {}
     clean = re.sub(r"\s+", " ", text.upper())
 
@@ -130,20 +133,19 @@ def extract_indicators_from_text(text: str):
 
 
 # -------------------------------------------------------------------
-#  Upload route
+#  Upload endpoint
 # -------------------------------------------------------------------
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...), x_api_key: str = Header(None)):
     """
     Handles file uploads for the Braivix AI Financial Analyzer.
-    Extracts text and calculates basic indicators from PDF, DOCX, CSV, or Excel.
-    Combines AI + regex fallback to ensure every upload returns structured data.
+    Extracts text and calculates indicators via AI + regex fallback.
     """
     try:
         filename = file.filename.lower()
         contents = await file.read()
 
-        # --- Extract text ---
+        # --- Extract text by file type ---
         if filename.endswith(".pdf"):
             raw_text = extract_text(io.BytesIO(contents)) or ""
         elif filename.endswith(".docx"):
@@ -158,21 +160,21 @@ async def upload_file(file: UploadFile = File(...), x_api_key: str = Header(None
         else:
             raw_text = contents.decode("utf-8", errors="ignore")
 
-        # --- Enforce safety limit for Vercel ---
-        if len(raw_text) > 7000:
-            raw_text = raw_text[:7000] + "\n\n[Text truncated for size limit]"
+        # --- Limit text for Vercel ---
+        if len(raw_text) > 8000:
+            raw_text = raw_text[:8000] + "\n\n[Text truncated for size limit]"
 
         if not raw_text.strip():
             raise ValueError("No readable content extracted from file.")
 
-        # --- AI-based numeric extraction ---
+        # --- Primary: GPT AI extraction ---
         ai_data = extract_financial_data_with_ai(raw_text)
         print("✅ AI parsed financials:", ai_data)
 
-        # --- Regex backup if AI fails ---
+        # --- Fallback: Regex extraction if AI failed ---
         if not any(ai_data.values()):
             ai_data = extract_indicators_from_text(raw_text)
-            print("🔁 Fallback: Regex extraction used:", ai_data)
+            print("🔁 Fallback extraction used:", ai_data)
 
         return {
             "status": "success",
