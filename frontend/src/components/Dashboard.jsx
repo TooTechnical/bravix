@@ -1,227 +1,77 @@
 import React, { useState } from "react";
-import { jsPDF } from "jspdf";
-import ReactMarkdown from "react-markdown";
-import { uploadFile, analyzeData } from "../bravixApi";
+import ScoreChart from "./ScoreChart";
 
-// 🧩 Braivix Report Component
-import FullReport from "./FullReport";
+const API_BASE = "https://braivix.vercel.app/api"; // ✅ your deployed backend
 
 export default function Dashboard() {
   const [file, setFile] = useState(null);
-  const [result, setResult] = useState(null);
-  const [report, setReport] = useState(null); // structured JSON report
-  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [report, setReport] = useState(null);
 
-  // 📄 Upload + AI analyze workflow
-  async function handleAIAnalyze(e) {
+  const handleUpload = async (e) => {
     e.preventDefault();
-    if (!file) {
-      setError("Please select a file first.");
-      return;
-    }
-
+    if (!file) return alert("Please select a file first!");
     setLoading(true);
-    setError(null);
-    setResult(null);
-    setReport(null);
 
-    try {
-      // Step 1️⃣ Upload to backend
-      const uploadRes = await uploadFile(file);
-      const parsed = uploadRes.data || uploadRes.parsed_data || {};
-      if (!parsed || Object.keys(parsed).length === 0)
-        throw new Error("Upload succeeded but no parsed data was returned.");
+    // Upload file
+    const formData = new FormData();
+    formData.append("file", file);
+    const uploadRes = await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
+    const uploadJson = await uploadRes.json();
+    console.log("✅ File upload response:", uploadJson);
 
-      // Step 2️⃣ Run GPT-5 analysis
-      const analyzeRes = await analyzeData(parsed, parsed.raw_text || "");
-      console.log("✅ AI analysis response:", analyzeRes);
+    // Run AI analysis
+    const analyzeRes = await fetch(`${API_BASE}/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(uploadJson.data),
+    });
+    const analyzeJson = await analyzeRes.json();
+    console.log("✅ AI analysis response:", analyzeJson);
 
-      setResult(analyzeRes);
-      setReport(analyzeRes.structured_report || {});
-    } catch (err) {
-      console.error("AI analysis error:", err);
-      setError(err.message || "Something went wrong during analysis.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // 🧾 PDF export
-  function handleDownloadReport() {
-    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-    doc.setFont("times", "bold");
-    doc.setFontSize(20);
-    doc.text("Braivix Credit Intelligence Report", 40, 60);
-
-    doc.setFont("times", "normal");
-    doc.setFontSize(12);
-
-    const reportText = result?.ai_analysis || "No analysis content available.";
-    const splitText = doc.splitTextToSize(reportText, 520);
-    doc.text(splitText, 40, 90);
-
-    doc.save("Braivix-Financial-Report.pdf");
-  }
+    setReport(analyzeJson);
+    setLoading(false);
+  };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        backgroundColor: "#F5F7FA",
-        color: "#0C2340",
-        fontFamily: "'Merriweather', serif",
-        padding: "3rem 1rem",
-      }}
-    >
-      {/* HEADER */}
-      <header style={{ textAlign: "center", marginBottom: "2.5rem" }}>
-        <h1 style={{ fontSize: "2.3rem", fontWeight: "700", color: "#0C2340" }}>
-          Braivix AI Credit Analysis Dashboard
-        </h1>
-        <p
-          style={{
-            color: "#4B5563",
-            fontSize: "1rem",
-            maxWidth: "600px",
-            margin: "0 auto",
-            fontFamily: "'Inter', sans-serif",
-          }}
+    <div className="max-w-5xl mx-auto p-6 text-gray-200">
+      <h1 className="text-3xl font-bold mb-4">Company Analysis Dashboard</h1>
+      <form onSubmit={handleUpload} className="flex gap-3 items-center mb-6">
+        <input
+          type="file"
+          accept=".pdf,.docx,.csv,.xlsx,.txt"
+          onChange={(e) => setFile(e.target.files[0])}
+          className="p-2 bg-gray-800 rounded-lg border border-gray-700"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500"
         >
-          Upload a company’s financial statement and let Braivix AI generate a full weighted credit
-          score, benchmark, and investment-grade analysis.
-        </p>
-      </header>
+          {loading ? "Analyzing..." : "Upload & Analyze"}
+        </button>
+      </form>
 
-      {/* UPLOAD PANEL */}
-      <section
-        style={{
-          background: "#FFFFFF",
-          borderRadius: "12px",
-          border: "1px solid #E5E7EB",
-          boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
-          padding: "2rem",
-          maxWidth: "600px",
-          margin: "0 auto 3rem",
-        }}
-      >
-        <form onSubmit={handleAIAnalyze} style={{ textAlign: "center" }}>
-          <label
-            style={{
-              display: "block",
-              fontWeight: "600",
-              marginBottom: "0.5rem",
-              color: "#1F2937",
-              fontFamily: "'Inter', sans-serif",
-            }}
-          >
-            Upload Financial Document (PDF, Excel, CSV, Word)
-          </label>
-          <input
-            type="file"
-            accept=".pdf,.csv,.xls,.xlsx,.doc,.docx"
-            onChange={(e) => setFile(e.target.files[0])}
-            style={{
-              display: "block",
-              margin: "0 auto 1rem",
-              padding: "0.6rem",
-              width: "100%",
-              border: "1px solid #D1D5DB",
-              borderRadius: "8px",
-              background: "#F9FAFB",
-              color: "#111827",
-              fontFamily: "'Inter', sans-serif",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              backgroundColor: "#0C2340",
-              color: "white",
-              fontWeight: "600",
-              padding: "12px 36px",
-              borderRadius: "10px",
-              border: "none",
-              cursor: "pointer",
-              width: "100%",
-              transition: "opacity 0.2s ease",
-              fontFamily: "'Inter', sans-serif",
-              opacity: loading ? 0.6 : 1,
-            }}
-          >
-            {loading ? "Analyzing..." : "Upload & Analyze"}
-          </button>
-        </form>
+      {report && (
+        <>
+          <div className="bg-gray-900 p-5 rounded-lg shadow-lg mb-6">
+            <h2 className="text-xl font-semibold mb-2 text-cyan-400">
+              Credit Evaluation Summary
+            </h2>
+            <p><strong>Weighted Credit Score:</strong> {report.scores?.weighted_credit_score}</p>
+            <p><strong>Evaluation Score:</strong> {report.scores?.evaluation_score} / 100</p>
+            <p><strong>Risk Category:</strong> {report.scores?.risk_category}</p>
+            <p><strong>Credit Decision:</strong> {report.scores?.credit_decision}</p>
+          </div>
 
-        {error && (
-          <div style={{ color: "#B23A48", marginTop: "1rem", fontWeight: "500" }}>{error}</div>
-        )}
-      </section>
+          <ScoreChart scores={report.scores?.grades} />
 
-      {/* REPORT PANEL */}
-      {result && (
-        <section
-          style={{
-            background: "#FFFFFF",
-            borderRadius: "14px",
-            border: "1px solid #E5E7EB",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-            maxWidth: "900px",
-            margin: "0 auto",
-            padding: "2rem",
-          }}
-        >
-          {report && Object.keys(report).length > 0 ? (
-            <FullReport report={report} onDownload={handleDownloadReport} />
-          ) : (
-            <>
-              <h3 style={{ fontSize: "1.5rem", fontWeight: "600", color: "#0C2340" }}>
-                AI Financial Report
-              </h3>
-              <ReactMarkdown
-                children={result.ai_analysis || "No structured report available."}
-                style={{
-                  color: "#1F2937",
-                  lineHeight: "1.6",
-                  fontFamily: "'Inter', sans-serif",
-                  marginTop: "1rem",
-                }}
-              />
-              <div style={{ textAlign: "center", marginTop: "2rem" }}>
-                <button
-                  onClick={handleDownloadReport}
-                  style={{
-                    backgroundColor: "#0C2340",
-                    color: "white",
-                    fontWeight: "600",
-                    padding: "12px 24px",
-                    borderRadius: "8px",
-                    border: "none",
-                    cursor: "pointer",
-                    fontFamily: "'Inter', sans-serif",
-                  }}
-                >
-                  ⬇️ Download Report (PDF)
-                </button>
-              </div>
-            </>
-          )}
-        </section>
+          <div className="mt-6 bg-gray-900 p-5 rounded-lg shadow-lg whitespace-pre-wrap">
+            <h3 className="text-lg font-semibold mb-3 text-cyan-400">Full Report</h3>
+            <p>{report.analysis_raw}</p>
+          </div>
+        </>
       )}
-
-      {/* FOOTER */}
-      <footer
-        style={{
-          marginTop: "3rem",
-          textAlign: "center",
-          fontSize: "0.9rem",
-          color: "#6B7280",
-          fontFamily: "'Inter', sans-serif",
-        }}
-      >
-        © {new Date().getFullYear()} Braivix — AI-Assisted Financial Intelligence
-      </footer>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   BarChart,
   Bar,
@@ -13,17 +13,55 @@ import {
 /**
  * Braivix ScoreChart.jsx
  * ------------------------------------------------------------
- * Displays category-level credit analysis results visually.
- * Ideal for Liquidity / Leverage / Profitability / Solvency.
+ * Groups the 18 backend indicators into 4 credit categories
+ * (Liquidity, Leverage, Profitability, Solvency)
+ * and visualizes them on a 1–5 rating scale.
  */
 export default function ScoreChart({ scores = {} }) {
-  // Example input (auto adapts to available keys)
-  // scores = { Liquidity: 3.0, Leverage: 3.9, Profitability: 3.0, Solvency: 4.1 }
+  // Compute 4 category averages based on Mariya’s model
+  const chartData = useMemo(() => {
+    if (!scores || Object.keys(scores).length === 0) return [];
 
-  const chartData = Object.entries(scores).map(([name, value]) => ({
-    name,
-    score: value,
-  }));
+    const groupAvg = (keys) =>
+      keys.reduce((sum, k) => sum + (scores[k] || 0), 0) / keys.length;
+
+    return [
+      {
+        name: "Liquidity",
+        score: groupAvg(["current_ratio", "quick_ratio", "cash_ratio"]),
+      },
+      {
+        name: "Leverage",
+        score: groupAvg([
+          "debt_ratio",
+          "debt_to_equity_ratio",
+          "interest_coverage_ratio",
+        ]),
+      },
+      {
+        name: "Profitability",
+        score: groupAvg([
+          "gross_profit_margin",
+          "operating_profit_margin",
+          "net_profit_margin",
+          "return_on_assets",
+          "return_on_equity",
+          "return_on_investment",
+        ]),
+      },
+      {
+        name: "Solvency",
+        score: groupAvg([
+          "asset_turnover_ratio",
+          "inventory_turnover",
+          "accounts_receivable_turnover",
+          "earnings_per_share",
+          "price_to_earnings_ratio",
+          "altman_z_score",
+        ]),
+      },
+    ].map((x) => ({ ...x, score: Number(x.score.toFixed(2)) }));
+  }, [scores]);
 
   if (chartData.length === 0) return null;
 
