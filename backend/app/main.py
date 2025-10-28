@@ -7,15 +7,15 @@ Handles API routing, middleware, and startup configuration for Vercel deployment
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
-from app.routes import upload, analyze, financial_analysis, test_connection
+from app.routes import upload, analyze, financial_analysis, test_connection, report
 
 app = FastAPI(
     title="Bravix AI Backend",
-    version="1.4",
+    version="1.5",
     description="AI-powered financial analysis and credit evaluation backend for Bravix (Vercel).",
 )
 
-# ✅ CORS configuration — supports all Vercel environments + localhost
+# ✅ CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -30,20 +30,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Register routers
+# ✅ Routers
 app.include_router(upload.router, prefix="/api", tags=["File Upload"])
 app.include_router(analyze.router, prefix="/api", tags=["AI Analysis"])
 app.include_router(financial_analysis.router, prefix="/api", tags=["Financial Indicators"])
 app.include_router(test_connection.router, prefix="/api", tags=["Health Check"])
+app.include_router(report.router, prefix="/api", tags=["Report Fetch"])
 
-# ✅ Universal preflight handler for OPTIONS requests
 @app.options("/{full_path:path}")
 async def preflight_handler(request: Request, full_path: str):
-    """
-    Handles OPTIONS requests (CORS preflight) for all paths.
-    """
     origin = request.headers.get("origin", "*")
-    print(f"🌀 Preflight CORS request from {origin} for /{full_path}")
     return Response(
         content="",
         status_code=200,
@@ -55,41 +51,19 @@ async def preflight_handler(request: Request, full_path: str):
         },
     )
 
-# ✅ Root route
 @app.get("/")
 def root():
-    print("🌐 Root endpoint accessed – backend is running.")
-    return {
-        "status": "online",
-        "message": "Welcome to Bravix FastAPI backend (Vercel deployment).",
-        "version": "1.4",
-    }
+    print("🌐 Backend is running.")
+    return {"status": "online", "message": "Bravix FastAPI backend active", "version": "1.5"}
 
-# ✅ Health check route (for frontend / uptime check)
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "bravix-backend", "version": "1.4"}
+    return {"status": "ok", "service": "bravix-backend", "version": "1.5"}
 
-# ✅ Debug upload test route
-@app.post("/api/debug-upload")
-async def debug_upload(request: Request):
-    """
-    Simple debug endpoint to confirm upload routing on Vercel.
-    """
-    print("🧩 Debug upload route hit.")
-    try:
-        body = await request.body()
-        print(f"📦 Received {len(body)} bytes")
-        return {"status": "ok", "bytes_received": len(body)}
-    except Exception as e:
-        print("⚠️ Upload test failed:", str(e))
-        return {"status": "error", "message": str(e)}
-
-# ✅ Startup event for diagnostics
 @app.on_event("startup")
 def on_startup():
-    print("🚀 Bravix backend started with full CORS + preflight + upload debug routes.")
+    print("🚀 Bravix backend started with CORS + AI routes.")
 
 @app.on_event("shutdown")
 def on_shutdown():
-    print("🛑 Bravix backend shutting down gracefully.")
+    print("🛑 Backend shutting down gracefully.")
