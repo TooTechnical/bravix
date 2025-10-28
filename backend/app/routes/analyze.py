@@ -5,7 +5,10 @@ Integrates extracted financial figures from the upload route,
 computes ratios dynamically, and generates a GPT-5 credit report.
 """
 import os, json
+from fastapi import APIRouter, Request, HTTPException
 from openai import OpenAI
+
+router = APIRouter()
 
 # ----------------------------------------------------------------------
 #  GPT client setup
@@ -40,7 +43,6 @@ def compute_indicators_from_basics(data: dict):
     except Exception:
         pass
 
-    # include raw values for reference
     out.update({
         "assets": asst, "liabilities": liab, "equity": eq,
         "revenue": rev, "profit": prof, "ebitda": ebitda
@@ -129,3 +131,30 @@ Write a 5-section professional report:
     except Exception as e:
         print("❌ analysis failed:",e)
         return {"analysis_raw":"No analysis generated.","scores":results,"structured_report":{}}
+
+# ----------------------------------------------------------------------
+#  FastAPI Route
+# ----------------------------------------------------------------------
+@router.post("/analyze")
+async def analyze_file(request: Request):
+    """
+    Accepts parsed data (from upload route) and generates GPT-5 analysis.
+    """
+    try:
+        data = await request.json()
+        raw_text = data.get("raw_text", "")
+        indicators = data.get("indicators", {}) or {}
+
+        print("🧠 Analyzing financial data via GPT...")
+        result = analyze_with_chatgpt(raw_text, indicators)
+
+        return {
+            "status": "success",
+            "message": "AI analysis complete",
+            "analysis_raw": result.get("analysis_raw"),
+            "scores": result.get("scores"),
+            "structured_report": result.get("structured_report"),
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI analysis failed: {e}")
