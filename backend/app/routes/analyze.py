@@ -24,7 +24,6 @@ def get_openai_client():
 #  Helpers
 # ---------------------------------------------------------
 def safe_float(x):
-    """Converts any value to float safely."""
     try:
         if x in [None, "null", "", "NaN"]:
             return 0.0
@@ -33,7 +32,6 @@ def safe_float(x):
         return 0.0
 
 def safe_div(num, denom):
-    """Prevent ZeroDivisionError."""
     try:
         if denom in [None, 0]:
             return 0.0
@@ -42,7 +40,6 @@ def safe_div(num, denom):
         return 0.0
 
 def normalize_indicators(data):
-    """Normalize and fill missing core values."""
     d = {k: safe_float(v) for k, v in data.items()}
     if not d.get("assets") and d.get("liabilities"):
         d["assets"] = d["liabilities"] * 1.05
@@ -117,10 +114,8 @@ def compute_weighted_score(ind):
     grades = {}
     for k, v in ind.items():
         if k in ["debt_ratio", "debt_to_equity_ratio"]:
-            # Lower is better
             grade = 5 if v < 0.3 else 4 if v < 0.5 else 3 if v < 0.7 else 2 if v < 1 else 1
         else:
-            # Higher is better
             grade = 5 if v >= 2 else 4 if v >= 1.5 else 3 if v >= 1 else 2 if v >= 0.5 else 1
         grades[k] = grade
 
@@ -150,10 +145,8 @@ def compute_weighted_score(ind):
 #  GPT Credit Analysis
 # ---------------------------------------------------------
 def generate_ai_report(raw_text, indicators, scores):
-    """Generate a professional credit report with GPT."""
     client = get_openai_client()
 
-    # If insufficient data, skip GPT
     if "error" in indicators or "error" in scores:
         return "Insufficient data for AI analysis."
 
@@ -182,7 +175,7 @@ def generate_ai_report(raw_text, indicators, scores):
                 {"role": "user", "content": prompt},
             ],
             temperature=0.3,
-            max_tokens=1000,
+            max_tokens=1200,
         )
         return res.choices[0].message.content.strip()
     except Exception as e:
@@ -193,7 +186,7 @@ def generate_ai_report(raw_text, indicators, scores):
 # ---------------------------------------------------------
 @router.post("/analyze")
 async def analyze(request: Request):
-    """Accept parsed financial data, compute all 18 indicators, and generate a full AI report."""
+    """Accept parsed financial data, compute indicators, and generate AI report."""
     try:
         data = await request.json()
         raw = data.get("raw_text", "")
@@ -211,18 +204,16 @@ async def analyze(request: Request):
             "message": "AI analysis complete",
             "analysis_raw": summary,
             "scores": scores,
-            "structured_report": {
-                "summary": summary,
-                "scores": scores,
-            },
+            "structured_report": {"summary": summary, "scores": scores},
+            "data": data,  # include company_name etc. for PDF
         }
 
-        # Save last report to /tmp (for visualization)
+        # ✅ Persist full report for PDF download
+        os.makedirs("/tmp", exist_ok=True)
         with open("/tmp/last_analysis.json", "w") as f:
             json.dump(result, f, indent=2)
 
         return result
-
     except Exception as e:
         print("❌ AI analysis failed:", e)
         raise HTTPException(status_code=500, detail=str(e))
