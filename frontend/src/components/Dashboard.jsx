@@ -14,39 +14,29 @@ export default function Dashboard() {
     e.preventDefault();
     if (!file) return alert("Please select a file first!");
     setLoading(true);
-
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const uploadRes = await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
-      const uploadJson = await uploadRes.json();
-
-      const analyzeRes = await fetch(`${API_BASE}/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(uploadJson.data),
+      const form = new FormData();
+      form.append("file", file);
+      const up = await fetch(`${API_BASE}/upload`, { method: "POST", body: form });
+      const parsed = await up.json();
+      const ai = await fetch(`${API_BASE}/analyze`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed.data)
       });
-      const analyzeJson = await analyzeRes.json();
-      console.log("✅ AI analysis response:", analyzeJson);
-      setReport(analyzeJson);
+      const result = await ai.json();
+      setReport(result);
     } catch (err) {
-      console.error("❌ Error analyzing:", err);
+      console.error(err);
       alert("Something went wrong while processing the file.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     setDownloading(true);
-    try {
-      window.open(`${API_BASE}/report/download`, "_blank");
-    } catch (err) {
-      console.error("❌ PDF download failed:", err);
-      alert("Could not download the report.");
-    } finally {
-      setTimeout(() => setDownloading(false), 2000);
-    }
+    window.open(`${API_BASE}/report/download`, "_blank");
+    setTimeout(() => setDownloading(false), 2000);
   };
 
   return (
@@ -54,19 +44,12 @@ export default function Dashboard() {
       <h1 className="text-3xl font-bold mb-4 text-white">Company Analysis Dashboard</h1>
 
       <form onSubmit={handleUpload} className="flex gap-3 items-center mb-6">
-        <input
-          type="file"
-          accept=".pdf,.docx,.csv,.xlsx,.txt"
-          onChange={(e) => setFile(e.target.files[0])}
-          className="p-2 bg-gray-800 rounded-lg border border-gray-700"
-        />
-        <button
-          type="submit"
-          disabled={loading}
+        <input type="file" accept=".pdf,.docx,.csv,.xlsx,.txt"
+               onChange={(e)=>setFile(e.target.files[0])}
+               className="p-2 bg-gray-800 rounded-lg border border-gray-700"/>
+        <button type="submit" disabled={loading}
           className={`px-4 py-2 rounded-lg text-white ${
-            loading ? "bg-gray-600 cursor-wait" : "bg-blue-600 hover:bg-blue-500"
-          }`}
-        >
+            loading ? "bg-gray-600 cursor-wait":"bg-blue-600 hover:bg-blue-500"}`}>
           {loading ? "Analyzing..." : "Upload & Analyze"}
         </button>
       </form>
@@ -74,9 +57,7 @@ export default function Dashboard() {
       {report && (
         <>
           <div className="bg-gray-900 p-5 rounded-lg shadow-lg mb-6">
-            <h2 className="text-xl font-semibold mb-2 text-cyan-400">
-              Credit Evaluation Summary
-            </h2>
+            <h2 className="text-xl font-semibold mb-2 text-cyan-400">Credit Evaluation Summary</h2>
             <p><strong>Weighted Credit Score:</strong> {report.scores?.weighted_credit_score}</p>
             <p><strong>Evaluation Score:</strong> {report.scores?.evaluation_score} / 100</p>
             <p><strong>Risk Category:</strong> {report.scores?.risk_category}</p>
@@ -87,28 +68,21 @@ export default function Dashboard() {
 
           <div className="mt-6 bg-gray-900 p-5 rounded-lg shadow-lg">
             <h3 className="text-lg font-semibold mb-3 text-cyan-400">Full Report</h3>
-            <div
-              className="prose prose-invert max-w-none"
-              dangerouslySetInnerHTML={{
-                __html: marked.parse(
-                  report?.structured_report?.summary ||
-                  report?.analysis_raw ||
-                  "No report available."
-                ),
-              }}
-            />
+            <div className="prose prose-invert max-w-none"
+                 dangerouslySetInnerHTML={{
+                   __html: marked.parse(
+                     report?.structured_report?.summary ||
+                     report?.analysis_raw || "No report available."
+                   )
+                 }}/>
           </div>
 
           <div className="flex justify-center mt-6">
-            <button
-              onClick={handleDownload}
-              disabled={downloading}
+            <button onClick={handleDownload} disabled={downloading}
               className={`px-5 py-2 rounded-md font-semibold transition ${
                 downloading
                   ? "bg-gray-600 text-gray-300 cursor-wait"
-                  : "bg-indigo-600 hover:bg-indigo-700 text-white"
-              }`}
-            >
+                  : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}>
               {downloading ? "📄 Preparing PDF..." : "📄 Download Report"}
             </button>
           </div>
