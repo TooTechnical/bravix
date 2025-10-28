@@ -1,16 +1,18 @@
 """
 Braivix – Dynamic AI Financial Analysis & Credit Evaluation
 -----------------------------------------------------------
-Implements Mariya’s 18-indicator weighted scoring model with AI interpretation.
+Implements Mariya’s 18-indicator weighted scoring model with safe division,
+AI-generated summary, and proper handling for incomplete financial data.
 """
+
 import os, json
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from openai import OpenAI
 
 router = APIRouter()
 
 # ---------------------------------------------------------
-#  Utility Functions
+#  GPT Client
 # ---------------------------------------------------------
 def get_openai_client():
     key = os.getenv("OPENAI_API_KEY")
@@ -18,7 +20,11 @@ def get_openai_client():
         raise ValueError("Missing OPENAI_API_KEY")
     return OpenAI(api_key=key)
 
+# ---------------------------------------------------------
+#  Helpers
+# ---------------------------------------------------------
 def safe_float(x):
+    """Converts any value to float safely."""
     try:
         if x in [None, "null", "", "NaN"]:
             return 0.0
@@ -26,45 +32,57 @@ def safe_float(x):
     except:
         return 0.0
 
+def safe_div(num, denom):
+    """Prevent ZeroDivisionError."""
+    try:
+        if denom in [None, 0]:
+            return 0.0
+        return num / denom
+    except Exception:
+        return 0.0
+
 def normalize_indicators(data):
-    """Ensure realistic defaults for missing values."""
+    """Normalize and fill missing core values."""
     d = {k: safe_float(v) for k, v in data.items()}
-    if d.get("assets", 0) == 0 and d.get("liabilities", 0):
+    if not d.get("assets") and d.get("liabilities"):
         d["assets"] = d["liabilities"] * 1.05
-    if d.get("equity", 0) == 0 and d.get("assets", 0):
+    if not d.get("equity") and d.get("assets"):
         d["equity"] = d["assets"] - d["liabilities"]
     return d
 
 # ---------------------------------------------------------
-#  Indicator Computation
+#  Indicator Computation (18 indicators)
 # ---------------------------------------------------------
 def compute_18_indicators(values):
-    A = values.get("assets", 0)
-    L = values.get("liabilities", 0)
-    E = values.get("equity", 0)
-    R = values.get("revenue", 0)
-    P = values.get("profit", 0)
-    EBIT = values.get("ebitda", 0)
+    A = safe_float(values.get("assets"))
+    L = safe_float(values.get("liabilities"))
+    E = safe_float(values.get("equity"))
+    R = safe_float(values.get("revenue"))
+    P = safe_float(values.get("profit"))
+    EBIT = safe_float(values.get("ebitda"))
+
+    if all(v == 0 for v in [A, L, E, R, P, EBIT]):
+        return {"error": "Insufficient data"}
 
     indicators = {
-        "current_ratio": round(A / (L or 1), 2) if A and L else 0,
-        "quick_ratio": round(A / (L or 1), 2),
-        "cash_ratio": round((A * 0.2) / (L or 1), 2),
-        "debt_to_equity_ratio": round((L / (E or 1)), 2),
-        "debt_ratio": round((L / (A or 1)), 2),
-        "interest_coverage_ratio": round((EBIT / (L * 0.05 or 1)), 2),
-        "gross_profit_margin": round((P / (R or 1)), 2),
-        "operating_profit_margin": round((EBIT / (R or 1)), 2),
-        "net_profit_margin": round((P / (R or 1)), 2),
-        "return_on_assets": round((P / (A or 1)), 2),
-        "return_on_equity": round((P / (E or 1)), 2),
-        "return_on_investment": round((P / (A or 1)), 2),
-        "asset_turnover_ratio": round((R / (A or 1)), 2),
+        "current_ratio": round(safe_div(A, L), 2),
+        "quick_ratio": round(safe_div(A, L), 2),
+        "cash_ratio": round(safe_div(A * 0.2, L), 2),
+        "debt_to_equity_ratio": round(safe_div(L, E), 2),
+        "debt_ratio": round(safe_div(L, A), 2),
+        "interest_coverage_ratio": round(safe_div(EBIT, L * 0.05), 2),
+        "gross_profit_margin": round(safe_div(P, R), 2),
+        "operating_profit_margin": round(safe_div(EBIT, R), 2),
+        "net_profit_margin": round(safe_div(P, R), 2),
+        "return_on_assets": round(safe_div(P, A), 2),
+        "return_on_equity": round(safe_div(P, E), 2),
+        "return_on_investment": round(safe_div(P, A), 2),
+        "asset_turnover_ratio": round(safe_div(R, A), 2),
         "inventory_turnover": 1.5,
         "accounts_receivable_turnover": 1.2,
-        "earnings_per_share": round((P / 100 or 1), 2),
+        "earnings_per_share": round(safe_div(P, 100), 2),
         "price_to_earnings_ratio": 15.0,
-        "altman_z_score": round(((1.2 * (E / A)) + (1.4 * (P / A)) + 3.3), 2),
+        "altman_z_score": round((1.2 * safe_div(E, A)) + (1.4 * safe_div(P, A)) + 3.3, 2),
     }
     return indicators
 
@@ -72,6 +90,9 @@ def compute_18_indicators(values):
 #  Weighted Score (Mariya’s Formula)
 # ---------------------------------------------------------
 def compute_weighted_score(ind):
+    if "error" in ind:
+        return {"error": "Insufficient data for scoring"}
+
     weights = {
         "current_ratio": 0.08,
         "quick_ratio": 0.08,
@@ -94,16 +115,16 @@ def compute_weighted_score(ind):
     }
 
     grades = {}
-    for k in weights:
-        val = ind.get(k, 0)
-        # debt ratios are inverse-good
-        if "debt" in k:
-            grade = 5 if val < 0.3 else 4 if val < 0.5 else 3 if val < 0.7 else 2 if val < 1 else 1
+    for k, v in ind.items():
+        if k in ["debt_ratio", "debt_to_equity_ratio"]:
+            # Lower is better
+            grade = 5 if v < 0.3 else 4 if v < 0.5 else 3 if v < 0.7 else 2 if v < 1 else 1
         else:
-            grade = 5 if val >= 2 else 4 if val >= 1.5 else 3 if val >= 1 else 2 if val >= 0.5 else 1
+            # Higher is better
+            grade = 5 if v >= 2 else 4 if v >= 1.5 else 3 if v >= 1 else 2 if v >= 0.5 else 1
         grades[k] = grade
 
-    weighted_score = sum(weights[k] * grades[k] for k in weights)
+    weighted_score = sum(weights.get(k, 0) * grades.get(k, 3) for k in weights)
     evaluation_score = round((weighted_score / 5) * 100, 1)
 
     if evaluation_score >= 90:
@@ -129,13 +150,20 @@ def compute_weighted_score(ind):
 #  GPT Credit Analysis
 # ---------------------------------------------------------
 def generate_ai_report(raw_text, indicators, scores):
+    """Generate a professional credit report with GPT."""
     client = get_openai_client()
+
+    # If insufficient data, skip GPT
+    if "error" in indicators or "error" in scores:
+        return "Insufficient data for AI analysis."
+
     prompt = f"""
     You are a senior financial risk analyst.
-    Write a concise Credit Evaluation Report using the following data.
+    Write a Credit Evaluation Report using the following data.
 
     Indicators:
     {json.dumps(indicators, indent=2)}
+
     Scores:
     {json.dumps(scores, indent=2)}
 
@@ -156,8 +184,7 @@ def generate_ai_report(raw_text, indicators, scores):
             temperature=0.3,
             max_tokens=1000,
         )
-        text = res.choices[0].message.content.strip()
-        return text
+        return res.choices[0].message.content.strip()
     except Exception as e:
         return f"Report generation failed: {e}"
 
@@ -166,26 +193,36 @@ def generate_ai_report(raw_text, indicators, scores):
 # ---------------------------------------------------------
 @router.post("/analyze")
 async def analyze(request: Request):
-    data = await request.json()
-    raw = data.get("raw_text", "")
-    indicators = normalize_indicators(data.get("indicators", {}))
-    ind18 = compute_18_indicators(indicators)
-    scores = compute_weighted_score(ind18)
-    summary = generate_ai_report(raw, ind18, scores)
+    """Accept parsed financial data, compute all 18 indicators, and generate a full AI report."""
+    try:
+        data = await request.json()
+        raw = data.get("raw_text", "")
+        indicators = normalize_indicators(data.get("indicators", {}))
+        ind18 = compute_18_indicators(indicators)
 
-    result = {
-        "status": "success",
-        "message": "AI analysis complete",
-        "analysis_raw": summary,
-        "scores": scores,
-        "structured_report": {
-            "summary": summary,
+        if "error" in ind18:
+            return {"error": "Insufficient data to perform analysis."}
+
+        scores = compute_weighted_score(ind18)
+        summary = generate_ai_report(raw, ind18, scores)
+
+        result = {
+            "status": "success",
+            "message": "AI analysis complete",
+            "analysis_raw": summary,
             "scores": scores,
-        },
-    }
+            "structured_report": {
+                "summary": summary,
+                "scores": scores,
+            },
+        }
 
-    # Save latest report for chart
-    with open("/tmp/last_analysis.json", "w") as f:
-        json.dump(result, f, indent=2)
+        # Save last report to /tmp (for visualization)
+        with open("/tmp/last_analysis.json", "w") as f:
+            json.dump(result, f, indent=2)
 
-    return result
+        return result
+
+    except Exception as e:
+        print("❌ AI analysis failed:", e)
+        raise HTTPException(status_code=500, detail=str(e))
