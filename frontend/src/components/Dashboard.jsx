@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import ScoreChart from "./ScoreChart";
+import { marked } from "marked";
 
-const API_BASE = "https://braivix.vercel.app/api"; // ✅ your deployed backend
+const API_BASE = "https://braivix.vercel.app/api";
 
 export default function Dashboard() {
   const [file, setFile] = useState(null);
@@ -15,18 +16,11 @@ export default function Dashboard() {
     setLoading(true);
 
     try {
-      // Upload file
       const formData = new FormData();
       formData.append("file", file);
-
-      const uploadRes = await fetch(`${API_BASE}/upload`, {
-        method: "POST",
-        body: formData,
-      });
+      const uploadRes = await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
       const uploadJson = await uploadRes.json();
-      console.log("✅ File upload response:", uploadJson);
 
-      // Run AI analysis
       const analyzeRes = await fetch(`${API_BASE}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -34,7 +28,6 @@ export default function Dashboard() {
       });
       const analyzeJson = await analyzeRes.json();
       console.log("✅ AI analysis response:", analyzeJson);
-
       setReport(analyzeJson);
     } catch (err) {
       console.error("❌ Error analyzing:", err);
@@ -47,13 +40,11 @@ export default function Dashboard() {
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      // Open the generated report directly
       window.open(`${API_BASE}/report/download`, "_blank");
     } catch (err) {
       console.error("❌ PDF download failed:", err);
       alert("Could not download the report.");
     } finally {
-      // short timeout so the loading button isn't instant
       setTimeout(() => setDownloading(false), 2000);
     }
   };
@@ -62,7 +53,6 @@ export default function Dashboard() {
     <div className="max-w-5xl mx-auto p-6 text-gray-200">
       <h1 className="text-3xl font-bold mb-4 text-white">Company Analysis Dashboard</h1>
 
-      {/* Upload Form */}
       <form onSubmit={handleUpload} className="flex gap-3 items-center mb-6">
         <input
           type="file"
@@ -81,38 +71,34 @@ export default function Dashboard() {
         </button>
       </form>
 
-      {/* Report Display */}
       {report && (
         <>
           <div className="bg-gray-900 p-5 rounded-lg shadow-lg mb-6">
             <h2 className="text-xl font-semibold mb-2 text-cyan-400">
               Credit Evaluation Summary
             </h2>
-            <p>
-              <strong>Weighted Credit Score:</strong>{" "}
-              {report.scores?.weighted_credit_score}
-            </p>
-            <p>
-              <strong>Evaluation Score:</strong> {report.scores?.evaluation_score} / 100
-            </p>
-            <p>
-              <strong>Risk Category:</strong> {report.scores?.risk_category}
-            </p>
-            <p>
-              <strong>Credit Decision:</strong> {report.scores?.credit_decision}
-            </p>
+            <p><strong>Weighted Credit Score:</strong> {report.scores?.weighted_credit_score}</p>
+            <p><strong>Evaluation Score:</strong> {report.scores?.evaluation_score} / 100</p>
+            <p><strong>Risk Category:</strong> {report.scores?.risk_category}</p>
+            <p><strong>Credit Decision:</strong> {report.scores?.credit_decision}</p>
           </div>
 
-          {/* Chart Visualization */}
           <ScoreChart scores={report.scores?.grades} />
 
-          {/* Full AI Text Report */}
-          <div className="mt-6 bg-gray-900 p-5 rounded-lg shadow-lg whitespace-pre-wrap">
+          <div className="mt-6 bg-gray-900 p-5 rounded-lg shadow-lg">
             <h3 className="text-lg font-semibold mb-3 text-cyan-400">Full Report</h3>
-            <p>{report.analysis_raw}</p>
+            <div
+              className="prose prose-invert max-w-none"
+              dangerouslySetInnerHTML={{
+                __html: marked.parse(
+                  report?.structured_report?.summary ||
+                  report?.analysis_raw ||
+                  "No report available."
+                ),
+              }}
+            />
           </div>
 
-          {/* 📄 Download Report Button */}
           <div className="flex justify-center mt-6">
             <button
               onClick={handleDownload}
