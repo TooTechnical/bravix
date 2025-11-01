@@ -11,9 +11,9 @@ services:
       apt-get install -y \
         ghostscript \
         poppler-utils \
-        tesseract-ocr \
         libgl1 \
         libglib2.0-0 \
+        tesseract-ocr \
         python3-tk && \
       pip install --upgrade pip setuptools wheel && \
       pip install -r requirements.txt
@@ -21,8 +21,6 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port 10000
 
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.4     # ✅ Force Python 3.12 to avoid pandas build errors
       - key: PORT
         value: 10000
       - fromGroup: Braivix-Secrets
