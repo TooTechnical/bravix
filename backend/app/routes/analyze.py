@@ -1,13 +1,16 @@
 """
-Braivix – Dynamic AI Financial Analysis & Credit Evaluation (v3.0)
-------------------------------------------------------------------
-Computes 18 financial indicators, assigns Company Class, Moody’s & S&P
-equivalents, generates AI report, and saves full result for PDF export.
+Braivix – Dynamic AI Financial Analysis & Credit Evaluation (v3.1 Render-Ready)
+-------------------------------------------------------------------------------
+Ensures stable environment loading for Render + bulletproof OpenAI initialization.
 """
 
 import os, json
 from fastapi import APIRouter, Request, HTTPException
 from openai import OpenAI
+from dotenv import load_dotenv
+
+# ✅ Ensure environment variables load before anything else
+load_dotenv()
 
 router = APIRouter()
 
@@ -17,7 +20,9 @@ router = APIRouter()
 def get_openai_client():
     key = os.getenv("OPENAI_API_KEY")
     if not key:
+        print("❌ Missing OPENAI_API_KEY in environment!")
         raise ValueError("Missing OPENAI_API_KEY")
+    print("🔑 OpenAI key loaded successfully (first 8 chars):", key[:8] + "...")
     return OpenAI(api_key=key)
 
 
@@ -45,7 +50,6 @@ def safe_div(a, b):
 def normalize_indicators(data):
     """Ensure all numeric and derived core values exist."""
     d = {k: safe_float(v) for k, v in data.items()}
-    # Estimate missing values logically
     if not d.get("assets") and d.get("liabilities"):
         d["assets"] = d["liabilities"] * 1.05
     if not d.get("equity") and d.get("assets") and d.get("liabilities"):
@@ -74,7 +78,7 @@ def compute_18_indicators(v):
 
     indicators = {
         "current_ratio": round(safe_div(A, L), 2),
-        "quick_ratio": round(safe_div(A * 0.9, L), 2),  # exclude inventory est.
+        "quick_ratio": round(safe_div(A * 0.9, L), 2),
         "cash_ratio": round(safe_div(A * 0.2, L), 2),
         "debt_to_equity_ratio": round(safe_div(L, E), 2),
         "debt_ratio": round(safe_div(L, A), 2),
@@ -136,7 +140,6 @@ def compute_weighted_score(ind):
     weighted = sum(weights[k] * grades[k] for k in weights)
     eval_score = round((weighted / 5) * 100, 1)
 
-    # Classification
     if eval_score >= 90:
         company_class = "A"
         risk, decision = "Excellent", "Approve"
@@ -153,7 +156,6 @@ def compute_weighted_score(ind):
         company_class = "E"
         risk, decision = "Critical", "Decline"
 
-    # Rating map
     rating_map = {
         "A": {"Moodys": "Aaa–A2", "S&P": "AAA–A"},
         "B": {"Moodys": "Baa1–Baa3", "S&P": "BBB+"},
@@ -211,6 +213,7 @@ def generate_ai_report(raw, indicators, scores):
         )
         return res.choices[0].message.content.strip()
     except Exception as e:
+        print(f"❌ OpenAI API error: {e}")
         return f"Report generation failed: {e}"
 
 
@@ -246,4 +249,5 @@ async def analyze(request: Request):
 
         return result
     except Exception as e:
+        print(f"❌ /analyze failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
