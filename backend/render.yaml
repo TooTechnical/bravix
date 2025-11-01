@@ -3,9 +3,19 @@ services:
     name: braivix-analyzer
     env: python
     rootDir: backend
+    plan: free
+    region: frankfurt
+
     buildCommand: |
-      apt-get update && apt-get install -y tesseract-ocr poppler-utils
+      apt-get update && \
+      apt-get install -y ghostscript poppler-utils python3-tk libgl1 libglib2.0-0 && \
       pip install -r requirements.txt
+
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port 10000
+
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.4
       - fromGroup: Braivix-Secrets
+      - key: PORT
+        value: 10000
