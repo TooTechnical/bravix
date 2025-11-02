@@ -22,22 +22,36 @@ function FinancialForm() {
         payload[k] = isNaN(val) ? null : val;
       });
 
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/financial-analysis`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": import.meta.env.VITE_API_KEY,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      // ✅ Determine correct backend URL
+      const API_URL =
+        import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== ""
+          ? import.meta.env.VITE_API_URL
+          : "https://bravix.fly.dev"; // fallback to Fly.io backend
 
-      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const endpoint = `${API_URL}/api/financial-analysis`;
+      console.log("📡 Sending financial analysis request to:", endpoint);
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key":
+            import.meta.env.VITE_API_KEY ||
+            "BRAVIX-DEMO-SECURE-KEY-2025",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Server error ${res.status}: ${errorText}`);
+      }
+
       const json = await res.json();
+      console.log("✅ Analysis response:", json);
       setData(json);
     } catch (err) {
+      console.error("❌ Financial analysis error:", err.message);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -107,7 +121,6 @@ function FinancialForm() {
         className="grid-form"
         style={{ marginTop: "2rem", width: "100%", maxWidth: "600px" }}
       >
-        {/* Example input fields */}
         <label>Annual Revenue (€)</label>
         <input type="number" name="revenue" step="any" required />
 

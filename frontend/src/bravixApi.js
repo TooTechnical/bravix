@@ -1,12 +1,12 @@
 // src/bravixApi.js
 // Bravix Frontend API Utility
-// Handles communication with FastAPI backend (Vercel or local)
+// Handles communication with FastAPI backend (Fly.io or local)
 
-// 🌐 Dynamic backend selection (Vercel → local fallback)
+// 🌐 Dynamic backend selection (Fly.io → local fallback)
 const API_BASE =
   import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== ""
     ? `${import.meta.env.VITE_API_URL}/api`
-    : "https://braivix.vercel.app/api"; // ✅ Default to deployed backend
+    : "https://bravix.fly.dev/api"; // ✅ Default to Fly.io backend if env missing
 
 // 🔐 Secure header key (must match backend’s FastAPI API key)
 const API_KEY =
@@ -95,5 +95,5 @@ export async function checkHealth() {
   }
 }
 
-// 🧭 Debug info (optional – helps ensure correct API target)
+// 🧭 Debug info (confirming active API)
 console.log("🌍 Active API base:", API_BASE);
