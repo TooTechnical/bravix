@@ -14,7 +14,9 @@ from dotenv import load_dotenv
 # ✅ Load environment variables early (Fly.io + local)
 load_dotenv()
 
-# Import routes
+# -----------------------------------------------------------
+# 📦 Import routes
+# -----------------------------------------------------------
 from app.routes import (
     upload,
     analyze,
@@ -30,9 +32,9 @@ app = FastAPI(
     title="Bravix AI Backend",
     version="1.9",
     description="AI-powered financial analysis backend (Fly.io version)",
-    docs_url="/api/docs",           # Swagger UI now at /api/docs
-    redoc_url="/api/redoc",         # Redoc at /api/redoc
-    openapi_url="/api/openapi.json" # OpenAPI schema at /api/openapi.json
+    docs_url="/api/docs",           # Swagger UI
+    redoc_url="/api/redoc",         # Redoc documentation
+    openapi_url="/api/openapi.json" # OpenAPI schema
 )
 
 # -----------------------------------------------------------
@@ -52,17 +54,20 @@ def is_allowed_origin(origin: str) -> bool:
         return False
     return any(origin.startswith(allowed) for allowed in ALLOWED_STATIC_ORIGINS)
 
+# ✅ CORS middleware supporting all Vercel preview domains
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(ALLOWED_STATIC_ORIGINS),
-    allow_origin_regex=r"https://(bravix|braivix)(-[a-zA-Z0-9-]+)?\.vercel\.app",
+    allow_origin_regex=(
+        r"https://(bravix|braivix)(-[a-zA-Z0-9-]+)?\.vercel\.app"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 class EnsureCORSHeaderMiddleware(BaseHTTPMiddleware):
-    """Ensure CORS headers are present even when exceptions occur."""
+    """Ensure CORS headers remain present even when exceptions occur."""
     async def dispatch(self, request: Request, call_next):
         origin = request.headers.get("origin")
         try:
@@ -70,9 +75,14 @@ class EnsureCORSHeaderMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             print(f"❌ Exception: {e}")
             response = JSONResponse({"error": str(e)}, status_code=500)
-        if is_allowed_origin(origin):
+
+        # Manually re-attach CORS headers for safety
+        if is_allowed_origin(origin) or (
+            origin and "vercel.app" in origin and ("bravix" in origin or "braivix" in origin)
+        ):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
+
         return response
 
 app.add_middleware(EnsureCORSHeaderMiddleware)
