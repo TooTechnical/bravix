@@ -1,10 +1,15 @@
-# Use a stable Python base image (no 3.13 problems!)
+# ==============================
+# 🐍 Bravix Backend – Fly.io Dockerfile
+# ==============================
+# Using Python 3.12 (stable; avoids pandas/numba build errors on 3.13)
 FROM python:3.12-slim
 
 # Set working directory
 WORKDIR /app
 
-# System dependencies (for PDF and DOCX parsing)
+# ------------------------------
+# 🧰 System dependencies
+# ------------------------------
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         tesseract-ocr \
@@ -15,20 +20,29 @@ RUN apt-get update && \
         python3-tk && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install dependencies
-COPY backend/requirements.txt .
+# ------------------------------
+# 📦 Install Python dependencies
+# ------------------------------
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy backend source code
+# ------------------------------
+# 📂 Copy application source
+# ------------------------------
 COPY backend /app
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PORT=10000
+# ------------------------------
+# ⚙️ Environment variables
+# ------------------------------
+ENV PYTHONUNBUFFERED=1 \
+    PORT=10000 \
+    PYTHONDONTWRITEBYTECODE=1
 
-# Expose the port Fly.io will use
+# ------------------------------
+# 🌍 Expose and run
+# ------------------------------
 EXPOSE 10000
 
-# Start FastAPI with Uvicorn
+# ✅ Start FastAPI (ensures Fly.io proxy detects active port)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10000"]
