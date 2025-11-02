@@ -1,17 +1,17 @@
 """
-Bravix – FastAPI Main Application Entry Point (Render-ready)
+Bravix – FastAPI Main Application Entry Point (Fly.io compatible)
 ------------------------------------------------------------
-Ensures .env loading, CORS setup, and full backend stability on Render.
+Ensures .env loading, CORS setup, and backend stability.
 """
 
-import os, re
-from fastapi import FastAPI, Request, Response
+import os
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from dotenv import load_dotenv
 
-# ✅ Load environment variables early (fixes Render OpenAI key issue)
+# ✅ Load environment variables early (Fly + local)
 load_dotenv()
 
 # Import routes
@@ -29,11 +29,14 @@ from app.routes import (
 app = FastAPI(
     title="Bravix AI Backend",
     version="1.9",
-    description="AI-powered financial analysis backend (Render version)",
+    description="AI-powered financial analysis backend (Fly.io version)",
+    docs_url="/api/docs",          # 👈 Swagger UI now at /api/docs
+    redoc_url="/api/redoc",        # 👈 Redoc at /api/redoc
+    openapi_url="/api/openapi.json" # 👈 OpenAPI schema at /api/openapi.json
 )
 
 # -----------------------------------------------------------
-# 🌐 CORS (Render + local + Vercel frontends)
+# 🌐 CORS (Fly + Vercel + Local)
 # -----------------------------------------------------------
 ALLOWED_STATIC_ORIGINS = {
     "https://bravix.vercel.app",
@@ -43,7 +46,6 @@ ALLOWED_STATIC_ORIGINS = {
 }
 
 def is_allowed_origin(origin: str) -> bool:
-    """Return True if origin is allowed."""
     if not origin:
         return False
     for allowed in ALLOWED_STATIC_ORIGINS:
@@ -61,7 +63,6 @@ app.add_middleware(
 )
 
 class EnsureCORSHeaderMiddleware(BaseHTTPMiddleware):
-    """Ensure CORS headers are present even on 500 errors."""
     async def dispatch(self, request: Request, call_next):
         origin = request.headers.get("origin")
         try:
@@ -86,7 +87,7 @@ app.include_router(test_connection.router, prefix="/api", tags=["Health Check"])
 app.include_router(report.router, prefix="/api", tags=["Report Download"])
 
 # -----------------------------------------------------------
-# 🌍 Root + Health
+# 🌍 Root + Health Endpoints
 # -----------------------------------------------------------
 @app.get("/")
 def root():
@@ -99,8 +100,9 @@ def health():
 
 @app.on_event("startup")
 def on_startup():
-    print("🚀 Bravix backend started successfully on Render.")
-    print("🔑 OPENAI_API_KEY:", os.getenv("OPENAI_API_KEY")[:8] + "..." if os.getenv("OPENAI_API_KEY") else "❌ MISSING!")
+    print("🚀 Bravix backend started successfully on Fly.io.")
+    key = os.getenv("OPENAI_API_KEY")
+    print("🔑 OPENAI_API_KEY:", key[:8] + "..." if key else "❌ MISSING!")
 
 @app.on_event("shutdown")
 def on_shutdown():
