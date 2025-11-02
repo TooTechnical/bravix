@@ -3,11 +3,15 @@
 // Handles communication with FastAPI backend (Fly.io or local)
 
 // 🌐 Dynamic backend selection (Fly.io → local fallback)
-const API_BASE =
-  import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== ""
-    ? `${import.meta.env.VITE_API_URL}/api`
-    : "https://bravix.fly.dev/api"; // ✅ Default to Fly.io backend
+let API_BASE = "";
 
+if (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== "") {
+  // Use the environment variable if present
+  API_BASE = `${import.meta.env.VITE_API_URL.replace(/\/$/, "")}/api`;
+} else {
+  // ✅ Hard fallback to Fly.io backend
+  API_BASE = "https://bravix.fly.dev/api";
+}
 
 // 🔐 Secure header key (must match backend’s FastAPI API key)
 const API_KEY =
