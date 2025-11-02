@@ -1,15 +1,16 @@
 """
-Braivix – Dynamic AI Financial Analysis & Credit Evaluation (v3.1 Render-Ready)
+Bravix – Dynamic AI Financial Analysis & Credit Evaluation (v3.2 Fly.io Ready)
 -------------------------------------------------------------------------------
-Ensures stable environment loading for Render + bulletproof OpenAI initialization.
+Ensures stable environment loading for Fly.io + bulletproof OpenAI initialization.
 """
 
-import os, json
+import os
+import json
 from fastapi import APIRouter, Request, HTTPException
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# ✅ Ensure environment variables load before anything else
+# ✅ Load environment variables early (important for Fly.io)
 load_dotenv()
 
 router = APIRouter()
@@ -22,25 +23,28 @@ def get_openai_client():
     if not key:
         print("❌ Missing OPENAI_API_KEY in environment!")
         raise ValueError("Missing OPENAI_API_KEY")
+
     print("🔑 OpenAI key loaded successfully (first 8 chars):", key[:8] + "...")
     return OpenAI(api_key=key)
 
 
 def safe_float(x):
+    """Converts a value to float safely."""
     try:
         if x in [None, "null", "", "NaN"]:
             return 0.0
         return float(str(x).replace(",", "").strip())
-    except:
+    except Exception:
         return 0.0
 
 
 def safe_div(a, b):
+    """Safely divide two numbers, return 0.0 on error."""
     try:
         if not b:
             return 0.0
         return a / b
-    except:
+    except Exception:
         return 0.0
 
 
@@ -50,6 +54,8 @@ def safe_div(a, b):
 def normalize_indicators(data):
     """Ensure all numeric and derived core values exist."""
     d = {k: safe_float(v) for k, v in data.items()}
+
+    # Derive missing values logically
     if not d.get("assets") and d.get("liabilities"):
         d["assets"] = d["liabilities"] * 1.05
     if not d.get("equity") and d.get("assets") and d.get("liabilities"):
@@ -98,6 +104,7 @@ def compute_18_indicators(v):
             (1.2 * safe_div(E, A)) + (1.4 * safe_div(P, A)) + 3.3, 2
         ),
     }
+
     return indicators
 
 
@@ -105,6 +112,7 @@ def compute_18_indicators(v):
 # 🧮 Weighted Score + Company Class + Ratings
 # --------------------------------------------------------------
 def compute_weighted_score(ind):
+    """Calculate weighted credit score and company classification."""
     if "error" in ind:
         return {"error": "Insufficient data for scoring"}
 
@@ -140,6 +148,7 @@ def compute_weighted_score(ind):
     weighted = sum(weights[k] * grades[k] for k in weights)
     eval_score = round((weighted / 5) * 100, 1)
 
+    # Classification
     if eval_score >= 90:
         company_class = "A"
         risk, decision = "Excellent", "Approve"
@@ -179,33 +188,34 @@ def compute_weighted_score(ind):
 # 🧠 AI Report Generation
 # --------------------------------------------------------------
 def generate_ai_report(raw, indicators, scores):
+    """Use OpenAI to generate the credit evaluation report."""
     if "error" in indicators or "error" in scores:
         return "Insufficient data for AI analysis."
 
     prompt = f"""
-    You are a senior financial risk analyst.
-    Write a Credit Evaluation Report using the following indicators and scores.
+You are a senior financial risk analyst.
+Write a Credit Evaluation Report using the following indicators and scores.
 
-    Indicators:
-    {json.dumps(indicators, indent=2)}
+Indicators:
+{json.dumps(indicators, indent=2)}
 
-    Scores:
-    {json.dumps(scores, indent=2)}
+Scores:
+{json.dumps(scores, indent=2)}
 
-    Structure:
-    1. Executive Summary
-    2. Quantitative Highlights
-    3. Strengths & Weaknesses
-    4. Stress Test & Outlook
-    5. Final Evaluation
-    """
+Structure:
+1. Executive Summary
+2. Quantitative Highlights
+3. Strengths & Weaknesses
+4. Stress Test & Outlook
+5. Final Evaluation
+"""
 
     try:
         client = get_openai_client()
         res = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a precise financial analyst."},
+                {"role": "system", "content": "You are a precise and data-driven financial analyst."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.3,
@@ -222,6 +232,7 @@ def generate_ai_report(raw, indicators, scores):
 # --------------------------------------------------------------
 @router.post("/analyze")
 async def analyze(request: Request):
+    """Main endpoint for running financial analysis."""
     try:
         data = await request.json()
         raw = data.get("raw_text", "")
@@ -243,6 +254,7 @@ async def analyze(request: Request):
             "data": data,
         }
 
+        # Save the latest analysis for debugging/logging
         os.makedirs("/tmp", exist_ok=True)
         with open("/tmp/last_analysis.json", "w") as f:
             json.dump(result, f, indent=2)
