@@ -11,7 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from dotenv import load_dotenv
 
-# ✅ Load environment variables early (Fly + local)
+# ✅ Load environment variables early (Fly.io + local)
 load_dotenv()
 
 # Import routes
@@ -30,28 +30,27 @@ app = FastAPI(
     title="Bravix AI Backend",
     version="1.9",
     description="AI-powered financial analysis backend (Fly.io version)",
-    docs_url="/api/docs",          # 👈 Swagger UI now at /api/docs
-    redoc_url="/api/redoc",        # 👈 Redoc at /api/redoc
-    openapi_url="/api/openapi.json" # 👈 OpenAPI schema at /api/openapi.json
+    docs_url="/api/docs",           # Swagger UI now at /api/docs
+    redoc_url="/api/redoc",         # Redoc at /api/redoc
+    openapi_url="/api/openapi.json" # OpenAPI schema at /api/openapi.json
 )
 
 # -----------------------------------------------------------
-# 🌐 CORS (Fly + Vercel + Local)
+# 🌐 CORS (Fly.io + Vercel + Local)
 # -----------------------------------------------------------
 ALLOWED_STATIC_ORIGINS = {
     "https://bravix.vercel.app",
     "https://braivix.vercel.app",
+    "https://bravix-pi.vercel.app",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 }
 
 def is_allowed_origin(origin: str) -> bool:
+    """Check if the request origin is allowed."""
     if not origin:
         return False
-    for allowed in ALLOWED_STATIC_ORIGINS:
-        if origin.startswith(allowed):
-            return True
-    return False
+    return any(origin.startswith(allowed) for allowed in ALLOWED_STATIC_ORIGINS)
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,6 +62,7 @@ app.add_middleware(
 )
 
 class EnsureCORSHeaderMiddleware(BaseHTTPMiddleware):
+    """Ensure CORS headers are present even when exceptions occur."""
     async def dispatch(self, request: Request, call_next):
         origin = request.headers.get("origin")
         try:
@@ -78,7 +78,7 @@ class EnsureCORSHeaderMiddleware(BaseHTTPMiddleware):
 app.add_middleware(EnsureCORSHeaderMiddleware)
 
 # -----------------------------------------------------------
-# 🔀 Include API Routers
+# 🔀 Include Routers
 # -----------------------------------------------------------
 app.include_router(upload.router, prefix="/api", tags=["File Upload"])
 app.include_router(analyze.router, prefix="/api", tags=["AI Analysis"])
@@ -87,17 +87,23 @@ app.include_router(test_connection.router, prefix="/api", tags=["Health Check"])
 app.include_router(report.router, prefix="/api", tags=["Report Download"])
 
 # -----------------------------------------------------------
-# 🌍 Root + Health Endpoints
+# 🌍 Root & Health
 # -----------------------------------------------------------
 @app.get("/")
 def root():
-    print("✅ Root accessed. Environment key loaded:", bool(os.getenv("OPENAI_API_KEY")))
-    return {"status": "online", "version": "1.9"}
+    """Root endpoint — confirms backend is online."""
+    key_loaded = bool(os.getenv("OPENAI_API_KEY"))
+    print(f"✅ Root accessed. OPENAI key loaded: {key_loaded}")
+    return {"status": "online", "version": "1.9", "openai_key": key_loaded}
 
 @app.get("/health")
 def health():
+    """Simple health check endpoint."""
     return {"status": "ok", "service": "bravix-backend", "version": "1.9"}
 
+# -----------------------------------------------------------
+# ⚡ Lifecycle Events
+# -----------------------------------------------------------
 @app.on_event("startup")
 def on_startup():
     print("🚀 Bravix backend started successfully on Fly.io.")
