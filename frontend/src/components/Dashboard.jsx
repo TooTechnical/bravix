@@ -2,7 +2,11 @@ import React, { useState } from "react";
 import ScoreChart from "./ScoreChart";
 import { marked } from "marked";
 
-const API_BASE = "https://braivix.vercel.app/api";
+// Dynamically use environment variable or fallback to Fly.io backend
+const API_BASE =
+  import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== ""
+    ? `${import.meta.env.VITE_API_URL}/api`
+    : "https://bravix.fly.dev/api";
 
 export default function Dashboard() {
   const [file, setFile] = useState(null);
