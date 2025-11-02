@@ -6,7 +6,8 @@
 const API_BASE =
   import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== ""
     ? `${import.meta.env.VITE_API_URL}/api`
-    : "https://bravix.fly.dev/api"; // ✅ Default to Fly.io backend if env missing
+    : "https://bravix.fly.dev/api"; // ✅ Default to Fly.io backend
+
 
 // 🔐 Secure header key (must match backend’s FastAPI API key)
 const API_KEY =
