@@ -13,13 +13,13 @@ services:
         tesseract-ocr \
         python3-tk && \
       pip install --upgrade pip setuptools wheel && \
-      pip install -r backend/requirements.txt
+      pip install -r requirements.txt  # ✅ rootDir already set to backend
 
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port 10000
 
     envVars:
-      - key: PYTHON_RUNTIME_FILE
-        value: backend/runtime.txt
+      - key: PYTHON_VERSION
+        value: 3.12.4   # ✅ Render reads envVars, not `environment:`
       - key: PORT
         value: 10000
       - fromGroup: Braivix-Secrets
