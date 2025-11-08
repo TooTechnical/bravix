@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [report, setReport] = useState(null);
   const [downloading, setDownloading] = useState(false);
 
+  // ------------------ Upload + Analyze ------------------
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!file) return alert("Please select a file first!");
@@ -45,13 +46,35 @@ export default function Dashboard() {
     }
   };
 
-  const handleDownload = () => {
+  // ------------------ Improved PDF Download ------------------
+  const handleDownload = async () => {
     setDownloading(true);
-    window.open(`${API_BASE}/report/download`, "_blank");
-    setTimeout(() => setDownloading(false), 2000);
+    try {
+      const response = await fetch(`${API_BASE}/report/download`);
+      if (!response.ok) throw new Error("Failed to fetch PDF");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+
+      // filename based on date or company class
+      const filename = `Braivix_Report_${new Date().toISOString().split("T")[0]}.pdf`;
+      a.download = filename;
+
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("❌ PDF download failed:", err);
+      alert("Failed to download PDF. Please make sure analysis was completed first.");
+    } finally {
+      setDownloading(false);
+    }
   };
 
-  // Dynamic risk color (for readability)
+  // ------------------ Risk Color Mapping ------------------
   const riskColor = (risk) => {
     switch (risk) {
       case "Excellent":
@@ -68,6 +91,8 @@ export default function Dashboard() {
         return "text-gray-300";
     }
   };
+
+  const scores = report?.classification || report?.scores || {}; // ✅ Works for both new + old backend
 
   return (
     <div className="max-w-5xl mx-auto p-6 text-gray-200">
@@ -96,50 +121,45 @@ export default function Dashboard() {
       {report && (
         <>
           <div className="bg-gray-900 p-5 rounded-lg shadow-lg mb-6">
-            <h2 className="text-xl font-semibold mb-2 text-cyan-400">Credit Evaluation Summary</h2>
+            <h2 className="text-xl font-semibold mb-2 text-cyan-400">
+              Credit Evaluation Summary
+            </h2>
 
             <p>
-              <strong>Weighted Credit Score:</strong>{" "}
-              {report.scores?.weighted_credit_score?.toFixed?.(2)}
-            </p>
-            <p>
-              <strong>Evaluation Score:</strong> {report.scores?.evaluation_score} / 100
+              <strong>Overall Health Score:</strong>{" "}
+              {report.overall_health_score || "N/A"}
             </p>
             <p>
               <strong>Risk Category:</strong>{" "}
-              <span className={riskColor(report.scores?.risk_category)}>
-                {report.scores?.risk_category}
+              <span className={riskColor(scores?.risk_category)}>
+                {scores?.risk_category || "N/A"}
               </span>
             </p>
             <p>
-              <strong>Credit Decision:</strong> {report.scores?.credit_decision}
+              <strong>Credit Decision:</strong> {scores?.credit_decision || "N/A"}
             </p>
-
-            {/* New Fields */}
-            <div className="mt-3 border-t border-gray-700 pt-3">
-              <p>
-                <strong>Company Class:</strong>{" "}
-                <span className="text-indigo-400 font-semibold">
-                  {report.scores?.company_class || "N/A"}
-                </span>
-              </p>
-              <p>
-                <strong>Moody’s Rating:</strong>{" "}
-                <span className="text-blue-400">
-                  {report.scores?.ratings?.Moodys || "N/A"}
-                </span>
-              </p>
-              <p>
-                <strong>S&P Rating:</strong>{" "}
-                <span className="text-blue-400">
-                  {report.scores?.ratings?.["S&P"] || "N/A"}
-                </span>
-              </p>
-            </div>
+            <p>
+              <strong>Company Class:</strong>{" "}
+              <span className="text-indigo-400 font-semibold">
+                {scores?.company_class || "N/A"}
+              </span>
+            </p>
+            <p>
+              <strong>Moody’s Rating:</strong>{" "}
+              <span className="text-blue-400">
+                {scores?.ratings?.Moodys || "N/A"}
+              </span>
+            </p>
+            <p>
+              <strong>S&P Rating:</strong>{" "}
+              <span className="text-blue-400">
+                {scores?.ratings?.["S&P"] || "N/A"}
+              </span>
+            </p>
           </div>
 
           {/* Chart */}
-          <ScoreChart scores={report.scores?.grades} />
+          <ScoreChart scores={scores?.grades} />
 
           {/* AI Summary */}
           <div className="mt-6 bg-gray-900 p-5 rounded-lg shadow-lg">
@@ -149,6 +169,7 @@ export default function Dashboard() {
               dangerouslySetInnerHTML={{
                 __html: marked.parse(
                   report?.structured_report?.summary ||
+                    report?.ai_report ||
                     report?.analysis_raw ||
                     "No report available."
                 ),

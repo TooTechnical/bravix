@@ -1,7 +1,8 @@
 """
-Bravix – Dynamic AI Financial Analysis & Credit Evaluation (v3.2 Fly.io Ready)
--------------------------------------------------------------------------------
-Ensures stable environment loading for Fly.io + bulletproof OpenAI initialization.
+Bravix – Unified AI Financial Analysis & Credit Evaluation (v4.0)
+-----------------------------------------------------------------
+Integrates precise ratio calculations from financial_indicators.py
+and generates AI-based credit reports aligned with Mariya’s model.
 """
 
 import os
@@ -9,8 +10,9 @@ import json
 from fastapi import APIRouter, Request, HTTPException
 from openai import OpenAI
 from dotenv import load_dotenv
+from app.utils.financial_indicators import compute_all  # ✅ Use the new accurate engine
 
-# ✅ Load environment variables early (important for Fly.io)
+# Load environment variables early
 load_dotenv()
 
 router = APIRouter()
@@ -29,7 +31,7 @@ def get_openai_client():
 
 
 def safe_float(x):
-    """Converts a value to float safely."""
+    """Convert safely to float."""
     try:
         if x in [None, "null", "", "NaN"]:
             return 0.0
@@ -38,176 +40,54 @@ def safe_float(x):
         return 0.0
 
 
-def safe_div(a, b):
-    """Safely divide two numbers, return 0.0 on error."""
-    try:
-        if not b:
-            return 0.0
-        return a / b
-    except Exception:
-        return 0.0
-
-
-# --------------------------------------------------------------
-# 🧩 Indicator Normalization
-# --------------------------------------------------------------
-def normalize_indicators(data):
-    """Ensure all numeric and derived core values exist."""
+def normalize_data(data):
+    """Ensure all financial inputs are numeric and consistent."""
+    if not data:
+        return {}
     d = {k: safe_float(v) for k, v in data.items()}
 
-    # Derive missing values logically
+    # Derive common missing fields
     if not d.get("assets") and d.get("liabilities"):
-        d["assets"] = d["liabilities"] * 1.05
+        d["assets"] = d["liabilities"] * 1.1
     if not d.get("equity") and d.get("assets") and d.get("liabilities"):
-        d["equity"] = d["assets"] - d["liabilities"]
+        d["equity"] = max(d["assets"] - d["liabilities"], 0)
+    if not d.get("revenue") and d.get("profit"):
+        d["revenue"] = d["profit"] * 5
     return d
-
-
-# --------------------------------------------------------------
-# 📊 Compute the 18 Financial Indicators
-# --------------------------------------------------------------
-def compute_18_indicators(v):
-    A, L, E, R, P, EBIT = map(
-        safe_float,
-        [
-            v.get("assets"),
-            v.get("liabilities"),
-            v.get("equity"),
-            v.get("revenue"),
-            v.get("profit"),
-            v.get("ebitda"),
-        ],
-    )
-
-    if all(x == 0 for x in [A, L, E, R, P, EBIT]):
-        return {"error": "Insufficient data"}
-
-    indicators = {
-        "current_ratio": round(safe_div(A, L), 2),
-        "quick_ratio": round(safe_div(A * 0.9, L), 2),
-        "cash_ratio": round(safe_div(A * 0.2, L), 2),
-        "debt_to_equity_ratio": round(safe_div(L, E), 2),
-        "debt_ratio": round(safe_div(L, A), 2),
-        "interest_coverage_ratio": round(safe_div(EBIT, L * 0.05), 2),
-        "gross_profit_margin": round(safe_div(P, R), 2),
-        "operating_profit_margin": round(safe_div(EBIT, R), 2),
-        "net_profit_margin": round(safe_div(P, R), 2),
-        "return_on_assets": round(safe_div(P, A), 2),
-        "return_on_equity": round(safe_div(P, E), 2),
-        "return_on_investment": round(safe_div(P, A), 2),
-        "asset_turnover_ratio": round(safe_div(R, A), 2),
-        "inventory_turnover": 1.5,
-        "accounts_receivable_turnover": 1.2,
-        "earnings_per_share": round(safe_div(P, 100), 2),
-        "price_to_earnings_ratio": 15.0,
-        "altman_z_score": round(
-            (1.2 * safe_div(E, A)) + (1.4 * safe_div(P, A)) + 3.3, 2
-        ),
-    }
-
-    return indicators
-
-
-# --------------------------------------------------------------
-# 🧮 Weighted Score + Company Class + Ratings
-# --------------------------------------------------------------
-def compute_weighted_score(ind):
-    """Calculate weighted credit score and company classification."""
-    if "error" in ind:
-        return {"error": "Insufficient data for scoring"}
-
-    weights = {
-        "current_ratio": 0.08,
-        "quick_ratio": 0.08,
-        "cash_ratio": 0.08,
-        "debt_to_equity_ratio": 0.10,
-        "debt_ratio": 0.10,
-        "interest_coverage_ratio": 0.10,
-        "gross_profit_margin": 0.05,
-        "operating_profit_margin": 0.05,
-        "net_profit_margin": 0.05,
-        "return_on_assets": 0.05,
-        "return_on_equity": 0.05,
-        "return_on_investment": 0.05,
-        "asset_turnover_ratio": 0.05,
-        "inventory_turnover": 0.05,
-        "accounts_receivable_turnover": 0.05,
-        "earnings_per_share": 0.025,
-        "price_to_earnings_ratio": 0.025,
-        "altman_z_score": 0.06,
-    }
-
-    grades = {}
-    for k, v in ind.items():
-        if k in ["debt_ratio", "debt_to_equity_ratio"]:
-            grade = 5 if v < 0.3 else 4 if v < 0.5 else 3 if v < 0.7 else 2 if v < 1 else 1
-        else:
-            grade = 5 if v >= 2 else 4 if v >= 1.5 else 3 if v >= 1 else 2 if v >= 0.5 else 1
-        grades[k] = grade
-
-    weighted = sum(weights[k] * grades[k] for k in weights)
-    eval_score = round((weighted / 5) * 100, 1)
-
-    # Classification
-    if eval_score >= 90:
-        company_class = "A"
-        risk, decision = "Excellent", "Approve"
-    elif eval_score >= 75:
-        company_class = "B"
-        risk, decision = "Good", "Proceed"
-    elif eval_score >= 60:
-        company_class = "C"
-        risk, decision = "Average", "Proceed with Caution"
-    elif eval_score >= 40:
-        company_class = "D"
-        risk, decision = "Weak", "Not Recommended"
-    else:
-        company_class = "E"
-        risk, decision = "Critical", "Decline"
-
-    rating_map = {
-        "A": {"Moodys": "Aaa–A2", "S&P": "AAA–A"},
-        "B": {"Moodys": "Baa1–Baa3", "S&P": "BBB+"},
-        "C": {"Moodys": "Ba1–Ba3", "S&P": "BB"},
-        "D": {"Moodys": "B1–B3", "S&P": "B"},
-        "E": {"Moodys": "Caa–C", "S&P": "CCC–D"},
-    }
-
-    return {
-        "grades": grades,
-        "weighted_credit_score": round(weighted, 2),
-        "evaluation_score": eval_score,
-        "company_class": company_class,
-        "risk_category": risk,
-        "credit_decision": decision,
-        "ratings": rating_map.get(company_class, {}),
-    }
 
 
 # --------------------------------------------------------------
 # 🧠 AI Report Generation
 # --------------------------------------------------------------
-def generate_ai_report(raw, indicators, scores):
-    """Use OpenAI to generate the credit evaluation report."""
-    if "error" in indicators or "error" in scores:
+def generate_ai_report(indicators, summary_data):
+    """Generate professional credit evaluation report using OpenAI."""
+    if not indicators or not summary_data:
         return "Insufficient data for AI analysis."
 
+    company_class = summary_data.get("company_class", "N/A")
+    risk = summary_data.get("risk_category", "N/A")
+    decision = summary_data.get("credit_decision", "N/A")
+    ratings = summary_data.get("ratings", {})
+
     prompt = f"""
-You are a senior financial risk analyst.
-Write a Credit Evaluation Report using the following indicators and scores.
+You are a senior financial risk analyst at Braivix.
+Analyze the company's financial performance based on these 18 key indicators and classification data.
 
 Indicators:
 {json.dumps(indicators, indent=2)}
 
-Scores:
-{json.dumps(scores, indent=2)}
+Overall Summary:
+Class: {company_class}
+Risk Category: {risk}
+Credit Decision: {decision}
+Ratings: {json.dumps(ratings, indent=2)}
 
-Structure:
-1. Executive Summary
-2. Quantitative Highlights
-3. Strengths & Weaknesses
-4. Stress Test & Outlook
-5. Final Evaluation
+Structure your report in 5 sections:
+1. Executive Summary (explain what the class/risk means)
+2. Quantitative Analysis (highlight key ratios driving the score)
+3. Strengths & Weaknesses (data-based, concise)
+4. Risk Outlook (describe stability, leverage, and liquidity)
+5. Final Recommendation (short, clear, investor-style summary)
 """
 
     try:
@@ -215,10 +95,10 @@ Structure:
         res = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a precise and data-driven financial analyst."},
+                {"role": "system", "content": "You are a precise, data-driven financial analyst. Be concise and professional."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.3,
+            temperature=0.25,
             max_tokens=1200,
         )
         return res.choices[0].message.content.strip()
@@ -232,34 +112,55 @@ Structure:
 # --------------------------------------------------------------
 @router.post("/analyze")
 async def analyze(request: Request):
-    """Main endpoint for running financial analysis."""
+    """
+    Main endpoint for financial + AI analysis.
+    Uses accurate financial indicator engine and generates
+    AI-based summary with classification and credit rating.
+    """
     try:
         data = await request.json()
-        raw = data.get("raw_text", "")
-        indicators = normalize_indicators(data.get("indicators", {}))
-        ind18 = compute_18_indicators(indicators)
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="Invalid JSON payload.")
 
-        if "error" in ind18:
-            return {"error": "Insufficient data"}
+        # Step 1: Normalize incoming numbers
+        normalized = normalize_data(data)
 
-        scores = compute_weighted_score(ind18)
-        summary = generate_ai_report(raw, ind18, scores)
-
-        result = {
-            "status": "success",
-            "message": "AI analysis complete",
-            "analysis_raw": summary,
-            "scores": scores,
-            "structured_report": {"summary": summary, "scores": scores},
-            "data": data,
+        # Step 2: Compute ratios + classification
+        analysis = compute_all(normalized)
+        indicators = analysis.get("indicators", [])
+        overall_score = analysis.get("overall_health_score")
+        summary_data = {
+            k: analysis.get(k)
+            for k in ["company_class", "risk_category", "credit_decision", "ratings"]
         }
 
-        # Save the latest analysis for debugging/logging
+        # Step 3: AI Summary
+        ai_text = generate_ai_report(indicators, summary_data)
+
+        # Step 4: Combine into final result
+        result = {
+            "status": "success",
+            "message": "AI financial analysis completed successfully.",
+            "indicators": indicators,
+            "overall_health_score": overall_score,
+            "classification": summary_data,
+            "ai_report": ai_text,
+            "structured_report": {
+                "summary": ai_text,
+                "scores": {
+                    "evaluation_score": overall_score,
+                    **summary_data,
+                },
+            },
+        }
+
+        # Save latest report to /tmp for PDF download
         os.makedirs("/tmp", exist_ok=True)
         with open("/tmp/last_analysis.json", "w") as f:
             json.dump(result, f, indent=2)
 
         return result
+
     except Exception as e:
         print(f"❌ /analyze failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
