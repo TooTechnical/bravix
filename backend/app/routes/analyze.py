@@ -1,9 +1,9 @@
 """
-Bravix – Unified AI Financial Analysis & Credit Evaluation (v4.1 Debug Edition)
+Bravix – Unified AI Financial Analysis & Credit Evaluation (v4.2 Stable)
 ------------------------------------------------------------------------------
-✅ Adds input sanity checks & detailed logging
-✅ Prints incoming payload, normalized data, and computed indicators
-✅ Helps verify full pipeline from upload → analyze
+✅ Unpacks nested 'indicators' dictionary correctly
+✅ Adds full debug logs for every stage
+✅ Computes accurate financial ratios and AI-based risk reports
 """
 
 import os
@@ -116,7 +116,7 @@ Structure your report in 5 concise sections:
 async def analyze(request: Request):
     """
     Unified route for financial ratio computation + AI summary.
-    Includes debug prints to verify data flow correctness.
+    Now correctly unpacks nested 'indicators' dict from upload.
     """
     try:
         data = await request.json()
@@ -125,8 +125,14 @@ async def analyze(request: Request):
         if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="Invalid JSON payload.")
 
-        # Step 1: Normalize
-        normalized = normalize_data(data)
+        # ✅ NEW: extract nested indicators if present
+        if "indicators" in data and isinstance(data["indicators"], dict):
+            indicators_data = data["indicators"]
+        else:
+            indicators_data = data  # fallback for flat payloads
+
+        # Step 1: Normalize extracted numbers
+        normalized = normalize_data(indicators_data)
 
         # Step 2: Compute all ratios
         print("🧮 Running compute_all() ...")
@@ -134,7 +140,6 @@ async def analyze(request: Request):
         indicators = analysis.get("indicators", [])
         overall_score = analysis.get("overall_health_score")
 
-        # Step 2b: Show computed indicators
         print("📈 Computed indicators:", json.dumps(indicators, indent=2))
         print("📊 Overall health score:", overall_score)
 
