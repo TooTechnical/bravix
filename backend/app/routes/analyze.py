@@ -1,8 +1,9 @@
 """
-Bravix – Unified AI Financial Analysis & Credit Evaluation (v4.0)
------------------------------------------------------------------
-Integrates precise ratio calculations from financial_indicators.py
-and generates AI-based credit reports aligned with Mariya’s model.
+Bravix – Unified AI Financial Analysis & Credit Evaluation (v4.1 Debug Edition)
+------------------------------------------------------------------------------
+✅ Adds input sanity checks & detailed logging
+✅ Prints incoming payload, normalized data, and computed indicators
+✅ Helps verify full pipeline from upload → analyze
 """
 
 import os
@@ -10,11 +11,10 @@ import json
 from fastapi import APIRouter, Request, HTTPException
 from openai import OpenAI
 from dotenv import load_dotenv
-from app.utils.financial_indicators import compute_all  # ✅ Use the new accurate engine
+from app.utils.financial_indicators import compute_all
 
-# Load environment variables early
+# Load environment
 load_dotenv()
-
 router = APIRouter()
 
 # --------------------------------------------------------------
@@ -25,13 +25,11 @@ def get_openai_client():
     if not key:
         print("❌ Missing OPENAI_API_KEY in environment!")
         raise ValueError("Missing OPENAI_API_KEY")
-
     print("🔑 OpenAI key loaded successfully (first 8 chars):", key[:8] + "...")
     return OpenAI(api_key=key)
 
 
 def safe_float(x):
-    """Convert safely to float."""
     try:
         if x in [None, "null", "", "NaN"]:
             return 0.0
@@ -43,16 +41,20 @@ def safe_float(x):
 def normalize_data(data):
     """Ensure all financial inputs are numeric and consistent."""
     if not data:
+        print("⚠️ normalize_data received empty payload")
         return {}
+
     d = {k: safe_float(v) for k, v in data.items()}
 
-    # Derive common missing fields
+    # Derive missing essentials where possible
     if not d.get("assets") and d.get("liabilities"):
         d["assets"] = d["liabilities"] * 1.1
     if not d.get("equity") and d.get("assets") and d.get("liabilities"):
         d["equity"] = max(d["assets"] - d["liabilities"], 0)
     if not d.get("revenue") and d.get("profit"):
         d["revenue"] = d["profit"] * 5
+
+    print("📊 Normalized financial data:", json.dumps(d, indent=2))
     return d
 
 
@@ -60,8 +62,8 @@ def normalize_data(data):
 # 🧠 AI Report Generation
 # --------------------------------------------------------------
 def generate_ai_report(indicators, summary_data):
-    """Generate professional credit evaluation report using OpenAI."""
     if not indicators or not summary_data:
+        print("⚠️ generate_ai_report called with empty data")
         return "Insufficient data for AI analysis."
 
     company_class = summary_data.get("company_class", "N/A")
@@ -71,23 +73,23 @@ def generate_ai_report(indicators, summary_data):
 
     prompt = f"""
 You are a senior financial risk analyst at Braivix.
-Analyze the company's financial performance based on these 18 key indicators and classification data.
+Analyze the company's financial performance based on these indicators and classification data.
 
 Indicators:
 {json.dumps(indicators, indent=2)}
 
-Overall Summary:
+Summary:
 Class: {company_class}
 Risk Category: {risk}
 Credit Decision: {decision}
 Ratings: {json.dumps(ratings, indent=2)}
 
-Structure your report in 5 sections:
-1. Executive Summary (explain what the class/risk means)
-2. Quantitative Analysis (highlight key ratios driving the score)
-3. Strengths & Weaknesses (data-based, concise)
-4. Risk Outlook (describe stability, leverage, and liquidity)
-5. Final Recommendation (short, clear, investor-style summary)
+Structure your report in 5 concise sections:
+1. Executive Summary
+2. Quantitative Analysis
+3. Strengths & Weaknesses
+4. Risk Outlook
+5. Final Recommendation
 """
 
     try:
@@ -95,7 +97,7 @@ Structure your report in 5 sections:
         res = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a precise, data-driven financial analyst. Be concise and professional."},
+                {"role": "system", "content": "You are a precise, data-driven financial analyst."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.25,
@@ -113,31 +115,39 @@ Structure your report in 5 sections:
 @router.post("/analyze")
 async def analyze(request: Request):
     """
-    Main endpoint for financial + AI analysis.
-    Uses accurate financial indicator engine and generates
-    AI-based summary with classification and credit rating.
+    Unified route for financial ratio computation + AI summary.
+    Includes debug prints to verify data flow correctness.
     """
     try:
         data = await request.json()
+        print("📥 Raw /analyze payload:", json.dumps(data, indent=2))
+
         if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="Invalid JSON payload.")
 
-        # Step 1: Normalize incoming numbers
+        # Step 1: Normalize
         normalized = normalize_data(data)
 
-        # Step 2: Compute ratios + classification
+        # Step 2: Compute all ratios
+        print("🧮 Running compute_all() ...")
         analysis = compute_all(normalized)
         indicators = analysis.get("indicators", [])
         overall_score = analysis.get("overall_health_score")
+
+        # Step 2b: Show computed indicators
+        print("📈 Computed indicators:", json.dumps(indicators, indent=2))
+        print("📊 Overall health score:", overall_score)
+
         summary_data = {
             k: analysis.get(k)
             for k in ["company_class", "risk_category", "credit_decision", "ratings"]
         }
+        print("🏷️ Classification summary:", json.dumps(summary_data, indent=2))
 
         # Step 3: AI Summary
         ai_text = generate_ai_report(indicators, summary_data)
 
-        # Step 4: Combine into final result
+        # Step 4: Final result
         result = {
             "status": "success",
             "message": "AI financial analysis completed successfully.",
@@ -154,10 +164,11 @@ async def analyze(request: Request):
             },
         }
 
-        # Save latest report to /tmp for PDF download
+        # Step 5: Save debug output
         os.makedirs("/tmp", exist_ok=True)
         with open("/tmp/last_analysis.json", "w") as f:
             json.dump(result, f, indent=2)
+        print("💾 Saved analysis to /tmp/last_analysis.json")
 
         return result
 
