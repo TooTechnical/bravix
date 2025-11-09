@@ -73,33 +73,45 @@ def normalize_label(label: str):
 # ---------- Regex Extraction ----------
 
 def extract_from_text(text: str):
-    """Extract values directly using regex from raw text (now handles dotted patterns)."""
+    """Extract values from messy PDF text (handles line breaks, dots, NBSP, etc.)."""
     data = {}
-    # Accept spaces, dots, dashes, or colons between label and number
-    gap = r"[\s\.\:\-–—…]*"
+
+    # Normalize all weird whitespace and punctuation
+    clean_text = (
+        text.replace("\u202f", " ")
+        .replace("\xa0", " ")
+        .replace(" ", " ")
+        .replace("·", ".")
+        .replace("•", ".")
+    )
+    clean_text = re.sub(r"\s{2,}", " ", clean_text)  # collapse extra spaces
+
+    # Accept anything between label and number
+    gap = r"(?:[\s\.\:\-–—…]*|\n|\r)*"
 
     patterns = {
-        "assets": rf"total assets{gap}([\d,\.]+)",
-        "liabilities": rf"total liabilities{gap}([\d,\.]+)",
-        "equity": rf"total equity{gap}([\d,\.]+)",
-        "revenue": rf"(?:revenue|turnover|income from operations){gap}([\d,\.]+)",
-        "profit": rf"(?:net profit|profit for the year|net income){gap}([\d,\.]+)",
-        "ebit": rf"\bebit{gap}([\d,\.]+)",
-        "ebitda": rf"\bebitda{gap}([\d,\.]+)",
-        "inventory": rf"(?:inventory|inventories){gap}([\d,\.]+)",
-        "cash": rf"(?:cash and cash equivalents|cash){gap}([\d,\.]+)",
-        "receivables": rf"(?:trade receivables|accounts receivable){gap}([\d,\.]+)",
-        "cost_of_sales": rf"(?:cost of sales|operating expenses){gap}([\d,\.]+)",
+        "assets": rf"total assets{gap}([\d][\d,\.\s]+)",
+        "liabilities": rf"total liabilities{gap}([\d][\d,\.\s]+)",
+        "equity": rf"total equity{gap}([\d][\d,\.\s]+)",
+        "revenue": rf"(?:revenue|turnover|income from operations){gap}([\d][\d,\.\s]+)",
+        "profit": rf"(?:net profit|profit for the year|net income){gap}([\d][\d,\.\s]+)",
+        "ebit": rf"\bebit{gap}([\d][\d,\.\s]+)",
+        "ebitda": rf"\bebitda{gap}([\d][\d,\.\s]+)",
+        "inventory": rf"(?:inventory|inventories){gap}([\d][\d,\.\s]+)",
+        "cash": rf"(?:cash and cash equivalents|cash){gap}([\d][\d,\.\s]+)",
+        "receivables": rf"(?:trade receivables|accounts receivable){gap}([\d][\d,\.\s]+)",
+        "cost_of_sales": rf"(?:cost of sales|operating expenses){gap}([\d][\d,\.\s]+)",
     }
 
     for key, pattern in patterns.items():
-        match = re.search(pattern, text, re.IGNORECASE)
+        match = re.search(pattern, clean_text, re.IGNORECASE)
         if match:
             val = safe_float(match.group(1))
-            if val:
+            if val is not None:
                 data[key] = val
 
     return data
+
 
 
 # ---------- AI Fallback ----------
