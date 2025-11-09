@@ -1,10 +1,11 @@
 """
-Bravix – Dual-Layer Financial Extraction (v5 Ultra OCR Edition)
---------------------------------------------------------------------
+Bravix – Dual-Layer Financial Extraction (v5.1 Ultra OCR + Liquidity Edition)
+----------------------------------------------------------------------------
 ✅ 300 DPI OCR with layout preservation
-✅ Merges pdfminer text + Tesseract output
+✅ Combines pdfminer text + Tesseract OCR
+✅ Detects current assets & liabilities for accurate liquidity ratios
 ✅ Handles image-only and hybrid PDFs automatically
-✅ Dumps OCR to log for debugging
+✅ Dumps OCR text to /tmp for inspection
 """
 
 import io, os, re, json, pandas as pd
@@ -31,7 +32,9 @@ def get_openai_client():
         raise ValueError("Missing OPENAI_API_KEY")
     return OpenAI(api_key=key)
 
+
 def safe_float(val):
+    """Convert messy numeric strings to float."""
     try:
         if val in [None, "", "NaN", "null"]:
             return None
@@ -40,7 +43,9 @@ def safe_float(val):
     except Exception:
         return None
 
+
 def detect_unit_multiplier(text: str) -> int:
+    """Detect whether values are expressed in millions or thousands."""
     text_lower = text.lower()
     if "in millions" in text_lower or "in € million" in text_lower:
         return 1_000_000
@@ -48,7 +53,9 @@ def detect_unit_multiplier(text: str) -> int:
         return 1_000
     return 1
 
+
 def normalize_label(label: str):
+    """Normalize label text for table extraction fallback."""
     label = label.lower().strip()
     replacements = {
         "assets": ["total assets", "assets"],
@@ -62,11 +69,14 @@ def normalize_label(label: str):
         "cash": ["cash", "cash and cash equivalents"],
         "receivables": ["trade receivables", "accounts receivable", "customers"],
         "cost_of_sales": ["cost of sales", "operating expenses"],
+        "current_assets": ["current assets"],
+        "current_liabilities": ["current liabilities"],
     }
     for key, terms in replacements.items():
         if any(term in label for term in terms):
             return key
     return None
+
 
 # --------------------------------------------------------------------
 # 🧠 OCR & Text Extraction
@@ -89,7 +99,6 @@ def run_ocr_high_accuracy(pdf_bytes: bytes) -> str:
         print(f"🧾 OCR page {i+1}: {len(page_text)} chars")
         ocr_text += f"\n\n--- PAGE {i+1} ---\n\n" + page_text
 
-    # Optional: dump to disk for inspection
     try:
         with open("/tmp/ocr_dump.txt", "w") as f:
             f.write(ocr_text)
@@ -99,12 +108,14 @@ def run_ocr_high_accuracy(pdf_bytes: bytes) -> str:
 
     return ocr_text
 
+
 def extract_text_hybrid(pdf_bytes: bytes) -> str:
     """Combine pdfminer text and OCR output into one text blob."""
     text_pdfminer = extract_text(io.BytesIO(pdf_bytes)) or ""
     print(f"🧠 PDFMiner text length: {len(text_pdfminer)}")
     ocr_text = ""
 
+    # If PDFMiner fails to extract enough digits → run OCR fallback
     if len(re.findall(r"\d", text_pdfminer)) < 20 or len(text_pdfminer) < 500:
         print("🔍 Low text density detected → running OCR fallback")
         ocr_text = run_ocr_high_accuracy(pdf_bytes)
@@ -113,10 +124,12 @@ def extract_text_hybrid(pdf_bytes: bytes) -> str:
     print(f"📄 Combined text length: {len(merged)}")
     return merged
 
+
 # --------------------------------------------------------------------
 # 🔍 Regex Extraction
 # --------------------------------------------------------------------
 def extract_from_text(text: str):
+    """Extract structured financial values using flexible regex patterns."""
     data = {}
     clean_text = (
         text.replace("\u202f", " ")
@@ -129,17 +142,24 @@ def extract_from_text(text: str):
     gap = r"(?:[\s\.\:\-–—…]*|\n|\r)*"
 
     patterns = {
+        # 🧾 Balance Sheet
         "assets": rf"total\s*assets{gap}([\d][\d\s,\.]+)",
+        "current_assets": rf"current\s*assets{gap}([\d][\d\s,\.]+)",
         "liabilities": rf"total\s*liabilities{gap}([\d][\d\s,\.]+)",
+        "current_liabilities": rf"current\s*liabilities{gap}([\d][\d\s,\.]+)",
         "equity": rf"(?:total\s*equity|shareholders[’']?\s*funds){gap}([\d][\d\s,\.]+)",
+
+        # 📈 Income Statement
         "revenue": rf"(?:revenue|turnover|income\s*from\s*operations){gap}([\d][\d\s,\.]+)",
         "profit": rf"(?:net\s*profit|profit\s*for\s*the\s*year|net\s*income){gap}([\d][\d\s,\.]+)",
         "ebit": rf"\bebit{gap}([\d][\d\s,\.]+)",
         "ebitda": rf"\bebitda{gap}([\d][\d\s,\.]+)",
-        "inventory": rf"(?:inventory|inventories){gap}([\d][\d\s,\.]+)",
-        "cash": rf"(?:cash\s*(?:and)?\s*cash\s*equivalents|cash){gap}([\d][\d\s,\.]+)",
-        "receivables": rf"(?:trade\s*receivables|accounts\s*receivable){gap}([\d][\d\s,\.]+)",
         "cost_of_sales": rf"(?:cost\s*of\s*sales|operating\s*expenses){gap}([\d][\d\s,\.]+)",
+
+        # 💰 Liquidity
+        "cash": rf"(?:cash\s*(?:and)?\s*cash\s*equivalents|cash){gap}([\d][\d\s,\.]+)",
+        "inventory": rf"(?:inventory|inventories){gap}([\d][\d\s,\.]+)",
+        "receivables": rf"(?:trade\s*receivables|accounts\s*receivable){gap}([\d][\d\s,\.]+)",
     }
 
     for key, pattern in patterns.items():
@@ -150,19 +170,24 @@ def extract_from_text(text: str):
                 data[key] = val
     return data
 
+
 # --------------------------------------------------------------------
 # 🧩 GPT Fallback
 # --------------------------------------------------------------------
 def extract_with_gpt(text: str):
+    """Ask GPT to extract missing values in valid JSON format."""
     client = get_openai_client()
     prompt = f"""
     You are a senior financial analyst. Extract numeric values (in millions if specified) for:
-    assets, liabilities, equity, revenue, profit, ebit, ebitda, cash, inventory, receivables.
+    assets, liabilities, equity, current assets, current liabilities, revenue, profit,
+    ebit, ebitda, cash, inventory, receivables, cost of sales.
 
     Return valid JSON, e.g.:
     {{
       "assets": ...,
       "liabilities": ...,
+      "current_assets": ...,
+      "current_liabilities": ...,
       "equity": ...,
       "revenue": ...,
       "profit": ...,
@@ -170,7 +195,8 @@ def extract_with_gpt(text: str):
       "ebitda": ...,
       "cash": ...,
       "inventory": ...,
-      "receivables": ...
+      "receivables": ...,
+      "cost_of_sales": ...
     }}
     """
     try:
@@ -185,6 +211,7 @@ def extract_with_gpt(text: str):
     except Exception as e:
         print("❌ GPT extraction failed:", e)
         return {}
+
 
 # --------------------------------------------------------------------
 # 🚀 Upload Endpoint
@@ -217,7 +244,7 @@ async def upload_file(file: UploadFile = File(...)):
             structured[k] *= multiplier
 
         # 3️⃣ GPT fallback for missing values
-        needed = ["assets", "liabilities", "equity", "revenue", "profit"]
+        needed = ["assets", "liabilities", "equity", "revenue", "profit", "current_assets", "current_liabilities"]
         if any(k not in structured for k in needed):
             gpt_data = extract_with_gpt(text)
             for k, v in gpt_data.items():
