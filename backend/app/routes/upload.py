@@ -1,11 +1,10 @@
 """
-Bravix – Dual-Layer Financial Extraction (v4 Hybrid OCR/Text Edition)
+Bravix – Dual-Layer Financial Extraction (v5 Ultra OCR Edition)
 --------------------------------------------------------------------
-✅ Now handles hybrid PDFs (both image and text layers)
-✅ Combines pdfminer text + OCR numeric data
-✅ Cleans dotted and spaced formats (e.g. "28 934 000")
-✅ Detects units (millions / thousands)
-✅ Smart fallback if numbers missing
+✅ 300 DPI OCR with layout preservation
+✅ Merges pdfminer text + Tesseract output
+✅ Handles image-only and hybrid PDFs automatically
+✅ Dumps OCR to log for debugging
 """
 
 import io, os, re, json, pandas as pd
@@ -72,34 +71,46 @@ def normalize_label(label: str):
 # --------------------------------------------------------------------
 # 🧠 OCR & Text Extraction
 # --------------------------------------------------------------------
-def run_ocr(pdf_bytes: bytes) -> str:
-    """Run OCR with digit-focused configuration."""
+def run_ocr_high_accuracy(pdf_bytes: bytes) -> str:
+    """High-accuracy OCR with layout preservation for numeric-heavy PDFs."""
+    try:
+        pages = convert_from_bytes(pdf_bytes, dpi=300)
+    except Exception as e:
+        print("❌ PDF to image conversion failed:", e)
+        return ""
+
     ocr_text = ""
-    pages = convert_from_bytes(pdf_bytes, dpi=250)
-    for page in pages:
+    for i, page in enumerate(pages):
         page_text = pytesseract.image_to_string(
             page,
             lang="eng",
-            config="--psm 6 --oem 3 -c tessedit_char_whitelist=0123456789.,- "
+            config="--psm 6 --oem 3 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz,.:- "
         )
-        ocr_text += page_text + "\n"
+        print(f"🧾 OCR page {i+1}: {len(page_text)} chars")
+        ocr_text += f"\n\n--- PAGE {i+1} ---\n\n" + page_text
+
+    # Optional: dump to disk for inspection
+    try:
+        with open("/tmp/ocr_dump.txt", "w") as f:
+            f.write(ocr_text)
+        print("✅ OCR dump saved to /tmp/ocr_dump.txt")
+    except Exception:
+        pass
+
     return ocr_text
 
 def extract_text_hybrid(pdf_bytes: bytes) -> str:
-    """Merge pdfminer text layer with OCR digits for hybrid PDFs."""
+    """Combine pdfminer text and OCR output into one text blob."""
     text_pdfminer = extract_text(io.BytesIO(pdf_bytes)) or ""
+    print(f"🧠 PDFMiner text length: {len(text_pdfminer)}")
     ocr_text = ""
 
-    # If few numbers in text layer, or text is short → trigger OCR
     if len(re.findall(r"\d", text_pdfminer)) < 20 or len(text_pdfminer) < 500:
-        print("🔍 OCR engaged (hybrid or scanned PDF detected)")
-        try:
-            ocr_text = run_ocr(pdf_bytes)
-        except Exception as e:
-            print("⚠️ OCR failed:", e)
+        print("🔍 Low text density detected → running OCR fallback")
+        ocr_text = run_ocr_high_accuracy(pdf_bytes)
 
-    # Merge both layers
     merged = text_pdfminer + "\n" + ocr_text
+    print(f"📄 Combined text length: {len(merged)}")
     return merged
 
 # --------------------------------------------------------------------
@@ -145,10 +156,10 @@ def extract_from_text(text: str):
 def extract_with_gpt(text: str):
     client = get_openai_client()
     prompt = f"""
-    You are a senior financial analyst. Extract key numeric values (in millions if specified) for:
+    You are a senior financial analyst. Extract numeric values (in millions if specified) for:
     assets, liabilities, equity, revenue, profit, ebit, ebitda, cash, inventory, receivables.
 
-    Return only valid JSON, for example:
+    Return valid JSON, e.g.:
     {{
       "assets": ...,
       "liabilities": ...,
@@ -185,7 +196,7 @@ async def upload_file(file: UploadFile = File(...)):
         name = file.filename.lower()
         raw = await file.read()
 
-        # 1️⃣ Text extraction (handles hybrid PDFs)
+        # 1️⃣ Text extraction (hybrid)
         if name.endswith(".pdf"):
             text = extract_text_hybrid(raw)
         elif name.endswith(".docx"):
@@ -205,34 +216,18 @@ async def upload_file(file: UploadFile = File(...)):
         for k in structured:
             structured[k] *= multiplier
 
-        # 3️⃣ Camelot table backup
-        if not structured and name.endswith(".pdf") and camelot:
-            try:
-                tables = camelot.read_pdf(io.BytesIO(raw), pages="1-end")
-                for table in tables:
-                    df = table.df
-                    for _, row in df.iterrows():
-                        joined = " ".join(str(x) for x in row.tolist())
-                        key = normalize_label(joined)
-                        if key:
-                            nums = re.findall(r"[-+]?\d*\.\d+|\d+", joined)
-                            if nums:
-                                structured[key] = safe_float(nums[-1]) * multiplier
-            except Exception as e:
-                print("⚠️ Camelot failed:", e)
-
-        # 4️⃣ GPT fallback for missing
+        # 3️⃣ GPT fallback for missing values
         needed = ["assets", "liabilities", "equity", "revenue", "profit"]
         if any(k not in structured for k in needed):
             gpt_data = extract_with_gpt(text)
             for k, v in gpt_data.items():
                 structured.setdefault(k, v)
 
-        # 5️⃣ Compute missing equity
+        # 4️⃣ Derive equity if possible
         if "assets" in structured and "liabilities" in structured and "equity" not in structured:
             structured["equity"] = round(structured["assets"] - structured["liabilities"], 2)
 
-        # 6️⃣ Validation
+        # 5️⃣ Validation
         if structured.get("assets") and structured.get("liabilities") and structured.get("equity"):
             diff = abs((structured["liabilities"] + structured["equity"]) - structured["assets"])
             if diff > 0.05 * structured["assets"]:
@@ -240,11 +235,11 @@ async def upload_file(file: UploadFile = File(...)):
 
         print("🧾 Extracted financial data:", json.dumps(structured, indent=2))
         if not structured:
-            print("⚠️ No values extracted from both text and OCR layers!")
+            print("⚠️ No numeric data detected. Check /tmp/ocr_dump.txt")
 
         return {
             "status": "success",
-            "message": "Hybrid AI financial extraction completed.",
+            "message": "Ultra OCR financial extraction completed.",
             "data": {"raw_text": text, "indicators": structured},
         }
 
