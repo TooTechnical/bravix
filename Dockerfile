@@ -1,22 +1,26 @@
 # ==============================
-# 🐍 Bravix Backend – Fly.io Dockerfile
+# 🐍 Bravix Backend – Fly.io Dockerfile (Final OCR-Ready)
 # ==============================
-# Using Python 3.12 (stable; avoids pandas/numba build errors on 3.13)
+
+# Use Python 3.12 (pandas and numba are stable here)
 FROM python:3.12-slim
 
 # Set working directory
 WORKDIR /app
 
 # ------------------------------
-# 🧰 System dependencies
+# 🧰 System dependencies (OCR + PDF)
 # ------------------------------
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         tesseract-ocr \
         poppler-utils \
+        ghostscript \
         libgl1 \
         libglib2.0-0 \
-        ghostscript \
+        libsm6 \
+        libxext6 \
+        libxrender1 \
         python3-tk && \
     rm -rf /var/lib/apt/lists/*
 
@@ -28,7 +32,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
 # ------------------------------
-# 📂 Copy application source
+# 📂 Copy backend source
 # ------------------------------
 COPY backend /app
 
@@ -36,13 +40,14 @@ COPY backend /app
 # ⚙️ Environment variables
 # ------------------------------
 ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     PORT=10000 \
-    PYTHONDONTWRITEBYTECODE=1
+    OMP_NUM_THREADS=1
 
 # ------------------------------
-# 🌍 Expose and run
+# 🌍 Expose & run FastAPI app
 # ------------------------------
 EXPOSE 10000
 
-# ✅ Start FastAPI (ensures Fly.io proxy detects active port)
+# Fly.io requires an active port listener for health checks.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10000"]

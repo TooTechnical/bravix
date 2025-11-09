@@ -1,25 +1,19 @@
-# fly.toml app configuration file generated for bravix on 2025-11-02T20:12:09Z
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
-app = 'bravix'
-primary_region = 'lhr'
+# fly.toml app configuration file for Bravix
+app = "bravix"
+primary_region = "lhr"
 
 [build]
+  dockerfile = "Dockerfile"  # make sure we use the Dockerfile
 
 [http_service]
   internal_port = 10000
   force_https = true
-  auto_stop_machines = 'stop'
+  auto_stop_machines = "stop"
   auto_start_machines = true
   min_machines_running = 0
-  processes = ['app']
+  processes = ["app"]
 
 [[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
+  memory = "1gb"
+  cpu_kind = "shared"
   cpus = 1
-
-  RUN apt-get update && apt-get install -y tesseract-ocr poppler-utils
-
