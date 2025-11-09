@@ -1,11 +1,11 @@
 """
-Bravix – 18-Indicator Financial Health Engine (v5.1 Final Edition)
+Bravix – 18-Indicator Financial Health Engine (v5.2 Stable Edition)
 -------------------------------------------------------------------
 Fixes:
-- Prevents double-counted liabilities (current + non-current)
-- Ensures correct leverage ratios
-- Stabilizes cost_of_sales and receivables turnover logic
-- Fully normalized and ready for global company parsing
+- Prevents NoneType arithmetic errors in Altman Z calculation
+- Adds global safeguard for missing financial data
+- Maintains correct leverage ratio logic (no double-counting)
+- Ready for production Fly.io deployment
 """
 
 from typing import Dict, Any, Optional
@@ -39,7 +39,7 @@ def normalize_scale(value):
     return v
 
 
-# ---------- Ratios ----------
+# ---------- Ratio Functions ----------
 
 def current_ratio(current_assets, current_liabilities):
     return safe_div(current_assets, current_liabilities)
@@ -98,13 +98,27 @@ def earnings_per_share(net_profit, shares_outstanding):
 def price_to_earnings(price_per_share, eps):
     return safe_div(price_per_share, eps)
 
+
 def altman_z_score(assets, liabilities, equity, revenue, net_profit):
-    A = safe_div(assets - liabilities, assets)
-    B = safe_div(equity, assets)
-    C = safe_div(net_profit * 1.15, assets)
-    D = safe_div(revenue, assets)
-    E = safe_div(equity, liabilities)
-    return round(1.2*A + 1.4*B + 3.3*C + 0.6*D + 1.0*E, 2)
+    """Safe Altman Z-score proxy (avoids NoneType errors)."""
+    assets = safe_num(assets)
+    liabilities = safe_num(liabilities)
+    equity = safe_num(equity)
+    revenue = safe_num(revenue)
+    net_profit = safe_num(net_profit)
+
+    if assets == 0:
+        return None
+
+    try:
+        A = safe_div(assets - liabilities, assets)
+        B = safe_div(equity, assets)
+        C = safe_div(net_profit * 1.15, assets)
+        D = safe_div(revenue, assets)
+        E = safe_div(equity, liabilities if liabilities else 1)
+        return round(1.2*A + 1.4*B + 3.3*C + 0.6*D + 1.0*E, 2)
+    except Exception:
+        return None
 
 
 # ---------- Status Evaluation ----------
@@ -193,25 +207,25 @@ def classify_company(overall_score: float) -> Dict[str, Any]:
 # ---------- Main Computation Engine ----------
 
 def compute_all(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Compute all ratios with global compatibility."""
+    """Compute all ratios with global compatibility and error safety."""
 
-    # Normalize numbers
+    # Normalize all numbers
     for k in list(data.keys()):
         data[k] = normalize_scale(data[k])
 
-    # Prevent double-counted liabilities
+    # --- Prevent double-counted liabilities ---
     if (
         data.get("current_liabilities")
         and data.get("non_current_liabilities")
-        and safe_num(data["liabilities"]) == 0
+        and safe_num(data.get("liabilities")) == 0
     ):
         data["liabilities"] = safe_num(data["current_liabilities"]) + safe_num(data["non_current_liabilities"])
 
-    # Derive equity if missing
+    # --- Derive missing equity if possible ---
     if not data.get("equity") and data.get("assets") and data.get("liabilities"):
         data["equity"] = safe_num(data["assets"]) - safe_num(data["liabilities"])
 
-    # Fallbacks
+    # --- Fallbacks ---
     if not data.get("current_assets") and data.get("assets"):
         data["current_assets"] = safe_num(data["assets"]) * 0.3
     if not data.get("current_liabilities") and data.get("liabilities"):
@@ -220,34 +234,38 @@ def compute_all(data: Dict[str, Any]) -> Dict[str, Any]:
     avg_inv = safe_num(data.get("avg_inventory") or data.get("inventory"))
     avg_recv = safe_num(data.get("avg_receivables") or data.get("receivables"))
 
-    # Compute ratios
-    ratios = {
-        "current_ratio": current_ratio(data.get("current_assets"), data.get("current_liabilities")),
-        "quick_ratio": quick_ratio(data.get("current_assets"), data.get("inventory"), data.get("current_liabilities")),
-        "cash_ratio": cash_ratio(data.get("cash"), data.get("short_term_investments"), data.get("current_liabilities")),
-        "debt_to_equity_ratio": debt_to_equity(data.get("liabilities"), data.get("equity")),
-        "debt_ratio": debt_ratio(data.get("liabilities"), data.get("assets")),
-        "interest_coverage_ratio": interest_coverage(data.get("ebit"), data.get("interest_expense")),
-        "gross_profit_margin": gross_profit_margin(data.get("gross_profit"), data.get("revenue")),
-        "operating_profit_margin": operating_profit_margin(data.get("ebit"), data.get("revenue")),
-        "net_profit_margin": net_profit_margin(data.get("profit"), data.get("revenue")),
-        "return_on_assets": return_on_assets(data.get("profit"), data.get("assets")),
-        "return_on_equity": return_on_equity(data.get("profit"), data.get("equity")),
-        "return_on_investment": return_on_investment(data.get("profit"), data.get("investment")),
-        "asset_turnover_ratio": asset_turnover(data.get("revenue"), data.get("assets")),
-        "inventory_turnover": inventory_turnover(data.get("cost_of_sales"), avg_inv),
-        "accounts_receivable_turnover": receivables_turnover(data.get("revenue"), avg_recv),
-        "earnings_per_share": earnings_per_share(data.get("profit"), data.get("shares_outstanding")),
-        "price_to_earnings_ratio": price_to_earnings(
-            data.get("share_price"),
-            earnings_per_share(data.get("profit"), data.get("shares_outstanding"))
-        ),
-        "altman_z_score": altman_z_score(
-            data.get("assets"), data.get("liabilities"), data.get("equity"),
-            data.get("revenue"), data.get("profit")
-        ),
-    }
+    # --- Compute ratios safely ---
+    try:
+        ratios = {
+            "current_ratio": current_ratio(data.get("current_assets"), data.get("current_liabilities")),
+            "quick_ratio": quick_ratio(data.get("current_assets"), data.get("inventory"), data.get("current_liabilities")),
+            "cash_ratio": cash_ratio(data.get("cash"), data.get("short_term_investments"), data.get("current_liabilities")),
+            "debt_to_equity_ratio": debt_to_equity(data.get("liabilities"), data.get("equity")),
+            "debt_ratio": debt_ratio(data.get("liabilities"), data.get("assets")),
+            "interest_coverage_ratio": interest_coverage(data.get("ebit"), data.get("interest_expense")),
+            "gross_profit_margin": gross_profit_margin(data.get("gross_profit"), data.get("revenue")),
+            "operating_profit_margin": operating_profit_margin(data.get("ebit"), data.get("revenue")),
+            "net_profit_margin": net_profit_margin(data.get("profit"), data.get("revenue")),
+            "return_on_assets": return_on_assets(data.get("profit"), data.get("assets")),
+            "return_on_equity": return_on_equity(data.get("profit"), data.get("equity")),
+            "return_on_investment": return_on_investment(data.get("profit"), data.get("investment")),
+            "asset_turnover_ratio": asset_turnover(data.get("revenue"), data.get("assets")),
+            "inventory_turnover": inventory_turnover(data.get("cost_of_sales"), avg_inv),
+            "accounts_receivable_turnover": receivables_turnover(data.get("revenue"), avg_recv),
+            "earnings_per_share": earnings_per_share(data.get("profit"), data.get("shares_outstanding")),
+            "price_to_earnings_ratio": price_to_earnings(
+                data.get("share_price"),
+                earnings_per_share(data.get("profit"), data.get("shares_outstanding"))
+            ),
+            "altman_z_score": altman_z_score(
+                data.get("assets"), data.get("liabilities"), data.get("equity"),
+                data.get("revenue"), data.get("profit")
+            ),
+        }
+    except Exception as e:
+        return {"error": f"Computation failed: {e}"}
 
+    # --- Evaluate results ---
     results, total_score, valid_count = [], 0, 0
     score_map = {"good": 1.0, "caution": 0.6, "poor": 0.2}
 
