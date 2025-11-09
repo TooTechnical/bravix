@@ -19,3 +19,8 @@ requests==2.32.4
 python-dotenv==1.0.1
 numpy==1.26.4
 numba==0.59.1
+
+pytesseract
+Pillow
+pdf2image
+
