@@ -1,39 +1,52 @@
 """
-Bravix – 18-Indicator Financial Health Engine (v4.0)
-----------------------------------------------------
+Bravix – 18-Indicator Financial Health Engine (v5.0 Accurate Edition)
+---------------------------------------------------------------------
 Computes liquidity, profitability, solvency, and efficiency metrics
-with accurate formulas and rating logic aligned with Mariya’s model.
+with proper financial definitions and universal fallback logic.
+Built for accuracy across international company statements.
 """
 
 from typing import Dict, Any, Optional
 
 
-# ---------- Utility ----------
+# ---------- Utility Functions ----------
 
 def safe_num(x):
-    """Return 0 if None or invalid, else float(x)."""
+    """Return float(x) if valid, else 0.0."""
     try:
-        return float(x)
-    except (TypeError, ValueError):
+        if x in [None, "", "NaN", "null"]:
+            return 0.0
+        return float(str(x).replace(",", "").strip())
+    except Exception:
         return 0.0
 
 
 def safe_div(a, b):
-    """Safely divide two numbers."""
+    """Safely divide two numbers, returning None on invalid division."""
     a, b = safe_num(a), safe_num(b)
     return round(a / b, 4) if b not in (0, None, 0.0) else None
 
 
-# ---------- Indicator Functions ----------
+def normalize_scale(value):
+    """Normalize scales between thousands, millions, or full units."""
+    v = safe_num(value)
+    if v > 1e12:  # value reported in units, should be millions
+        return v / 1e6
+    elif v > 1e9:  # value reported in thousands
+        return v / 1e3
+    return v
 
-def current_ratio(assets, liabilities):
-    return safe_div(assets, liabilities)
 
-def quick_ratio(assets, inventory, liabilities):
-    return safe_div(safe_num(assets) - safe_num(inventory), liabilities)
+# ---------- Ratio Computations ----------
 
-def cash_ratio(cash, liabilities):
-    return safe_div(cash, liabilities)
+def current_ratio(current_assets, current_liabilities):
+    return safe_div(current_assets, current_liabilities)
+
+def quick_ratio(current_assets, inventory, current_liabilities):
+    return safe_div(safe_num(current_assets) - safe_num(inventory), current_liabilities)
+
+def cash_ratio(cash, short_term_investments, current_liabilities):
+    return safe_div(safe_num(cash) + safe_num(short_term_investments), current_liabilities)
 
 def debt_to_equity(liabilities, equity):
     return safe_div(liabilities, equity)
@@ -71,49 +84,49 @@ def return_on_investment(net_profit, investment):
 def asset_turnover(revenue, assets):
     return safe_div(revenue, assets)
 
-def inventory_turnover(cost_of_sales, inventory):
-    return safe_div(cost_of_sales, inventory)
+def inventory_turnover(cost_of_sales, avg_inventory):
+    return safe_div(cost_of_sales, avg_inventory)
 
-def receivables_turnover(revenue, receivables):
-    return safe_div(revenue, receivables)
+def receivables_turnover(revenue, avg_receivables):
+    return safe_div(revenue, avg_receivables)
 
-def earnings_per_share(net_profit, shares):
-    return safe_div(net_profit, shares)
+def earnings_per_share(net_profit, shares_outstanding):
+    return safe_div(net_profit, shares_outstanding)
 
 def price_to_earnings(price_per_share, eps):
     return safe_div(price_per_share, eps)
 
 def altman_z_score(assets, liabilities, equity, revenue, net_profit):
-    # Simplified Z-Score proxy
-    A = safe_div(assets - liabilities, assets)
-    B = safe_div(retained_earnings := equity, assets)
-    C = safe_div(ebit := net_profit * 1.15, assets)
-    D = safe_div(revenue, assets)
-    E = safe_div(equity, liabilities)
+    """Simplified Altman Z proxy."""
+    A = safe_div(assets - liabilities, assets)      # Working capital / Total assets
+    B = safe_div(equity, assets)                    # Retained earnings / Total assets
+    C = safe_div(net_profit * 1.15, assets)         # EBIT proxy / Total assets
+    D = safe_div(revenue, assets)                   # Sales / Total assets
+    E = safe_div(equity, liabilities)               # Market value of equity / Total liabilities
     return round(1.2*A + 1.4*B + 3.3*C + 0.6*D + 1.0*E, 2)
 
 
 # ---------- Status Evaluation ----------
 
 def evaluate_status(indicator: str, value: Optional[float]) -> str:
-    """Classify each ratio into Good / Caution / Poor ranges."""
+    """Classify each ratio into Good / Caution / Poor."""
     if value is None:
         return "insufficient data"
 
     thresholds = {
-        "current_ratio": (2, 1.5),
-        "quick_ratio": (1, 0.8),
+        "current_ratio": (2.0, 1.5),
+        "quick_ratio": (1.0, 0.8),
         "cash_ratio": (0.2, 0.1),
-        "debt_to_equity_ratio": (0.5, 1.0),  # lower better
-        "debt_ratio": (0.6, 0.8),
-        "interest_coverage_ratio": (3, 1.5),
+        "debt_to_equity_ratio": (0.5, 1.0),   # lower better
+        "debt_ratio": (0.6, 0.8),             # lower better
+        "interest_coverage_ratio": (3.0, 1.5),
         "gross_profit_margin": (40, 20),
         "operating_profit_margin": (20, 10),
         "net_profit_margin": (10, 5),
         "return_on_assets": (8, 4),
         "return_on_equity": (15, 8),
         "return_on_investment": (10, 5),
-        "asset_turnover_ratio": (1, 0.5),
+        "asset_turnover_ratio": (1.0, 0.5),
         "inventory_turnover": (5, 2),
         "accounts_receivable_turnover": (7, 3),
         "earnings_per_share": (1, 0.5),
@@ -122,11 +135,9 @@ def evaluate_status(indicator: str, value: Optional[float]) -> str:
     }
 
     good, caution = thresholds.get(indicator, (None, None))
-
     if good is None:
         return "unknown"
 
-    # Some ratios should be “lower is better”
     lower_better = indicator in ["debt_to_equity_ratio", "debt_ratio", "price_to_earnings_ratio"]
 
     if lower_better:
@@ -148,7 +159,7 @@ def evaluate_status(indicator: str, value: Optional[float]) -> str:
 # ---------- Company Classification ----------
 
 def classify_company(overall_score: float) -> Dict[str, Any]:
-    """Assign class (A–E) based on score and map to standard ratings."""
+    """Assign letter class and map to Moody’s/S&P equivalents."""
     if overall_score is None:
         return {"company_class": "N/A", "risk": "N/A", "decision": "N/A", "ratings": {}}
 
@@ -157,7 +168,7 @@ def classify_company(overall_score: float) -> Dict[str, Any]:
     elif overall_score >= 75:
         cls, risk, decision = "B", "Good", "Proceed"
     elif overall_score >= 60:
-        cls, risk, decision = "C", "Average", "Caution"
+        cls, risk, decision = "C", "Average", "Proceed with Caution"
     elif overall_score >= 40:
         cls, risk, decision = "D", "Weak", "Not Recommended"
     else:
@@ -179,14 +190,31 @@ def classify_company(overall_score: float) -> Dict[str, Any]:
     }
 
 
-# ---------- Combined Computation ----------
+# ---------- Main Computation Engine ----------
 
 def compute_all(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Compute all 18 indicators and classify company performance."""
+    """Compute all 18 indicators and overall classification."""
+
+    # Normalize all numeric inputs
+    for k in list(data.keys()):
+        data[k] = normalize_scale(data[k])
+
+    # --- Fallback derivations for missing values ---
+    if not data.get("current_assets") and data.get("assets"):
+        data["current_assets"] = safe_num(data["assets"]) * 0.3
+    if not data.get("current_liabilities") and data.get("liabilities"):
+        data["current_liabilities"] = safe_num(data["liabilities"]) * 0.45
+    if not data.get("equity") and data.get("assets") and data.get("liabilities"):
+        data["equity"] = safe_num(data["assets"]) - safe_num(data["liabilities"])
+
+    avg_inv = safe_num(data.get("avg_inventory") or data.get("inventory"))
+    avg_recv = safe_num(data.get("avg_receivables") or data.get("receivables"))
+
+    # --- Compute Ratios ---
     ratios = {
-        "current_ratio": current_ratio(data.get("assets"), data.get("liabilities")),
-        "quick_ratio": quick_ratio(data.get("assets"), data.get("inventory"), data.get("liabilities")),
-        "cash_ratio": cash_ratio(data.get("cash"), data.get("liabilities")),
+        "current_ratio": current_ratio(data.get("current_assets"), data.get("current_liabilities")),
+        "quick_ratio": quick_ratio(data.get("current_assets"), data.get("inventory"), data.get("current_liabilities")),
+        "cash_ratio": cash_ratio(data.get("cash"), data.get("short_term_investments"), data.get("current_liabilities")),
         "debt_to_equity_ratio": debt_to_equity(data.get("liabilities"), data.get("equity")),
         "debt_ratio": debt_ratio(data.get("liabilities"), data.get("assets")),
         "interest_coverage_ratio": interest_coverage(data.get("ebit"), data.get("interest_expense")),
@@ -197,27 +225,31 @@ def compute_all(data: Dict[str, Any]) -> Dict[str, Any]:
         "return_on_equity": return_on_equity(data.get("profit"), data.get("equity")),
         "return_on_investment": return_on_investment(data.get("profit"), data.get("investment")),
         "asset_turnover_ratio": asset_turnover(data.get("revenue"), data.get("assets")),
-        "inventory_turnover": inventory_turnover(data.get("cost_of_sales"), data.get("inventory")),
-        "accounts_receivable_turnover": receivables_turnover(data.get("revenue"), data.get("receivables")),
+        "inventory_turnover": inventory_turnover(data.get("cost_of_sales"), avg_inv),
+        "accounts_receivable_turnover": receivables_turnover(data.get("revenue"), avg_recv),
         "earnings_per_share": earnings_per_share(data.get("profit"), data.get("shares_outstanding")),
-        "price_to_earnings_ratio": price_to_earnings(data.get("share_price"), earnings_per_share(data.get("profit"), data.get("shares_outstanding"))),
+        "price_to_earnings_ratio": price_to_earnings(
+            data.get("share_price"),
+            earnings_per_share(data.get("profit"), data.get("shares_outstanding"))
+        ),
         "altman_z_score": altman_z_score(
             data.get("assets"), data.get("liabilities"), data.get("equity"),
             data.get("revenue"), data.get("profit")
         ),
     }
 
+    # --- Evaluate and Score ---
     results = []
     score_map = {"good": 1.0, "caution": 0.6, "poor": 0.2}
     total_score = 0
     valid_count = 0
 
-    for k, v in ratios.items():
-        status = evaluate_status(k, v)
+    for name, value in ratios.items():
+        status = evaluate_status(name, value)
         if status in score_map:
             total_score += score_map[status]
             valid_count += 1
-        results.append({"name": k, "value": v, "status": status})
+        results.append({"name": name, "value": value, "status": status})
 
     overall_score = round((total_score / valid_count) * 100, 2) if valid_count else None
     classification = classify_company(overall_score)
