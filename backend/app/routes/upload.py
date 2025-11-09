@@ -1,11 +1,8 @@
 """
-Bravix – Bulletproof Financial Extraction (v2 Universal Parser)
-----------------------------------------------------------------
-Now detects:
-- 'Total Assets', 'Total Liabilities', 'Total Equity'
-- 'Revenue', 'Operating Profit', 'Net Profit', 'EBIT', 'EBITDA'
-- 'Cash and Cash Equivalents', 'Inventories', 'Receivables'
-- Compatible with CMA CGM, Deloitte, PwC, IFRS reports
+Bravix – Bulletproof Financial Extraction (v2.1 Smart Regex Edition)
+--------------------------------------------------------------------
+Improved pattern matching for CMA CGM & IFRS reports.
+Handles dotted lines, colons, and spaced numeric formats automatically.
 """
 
 import io, os, re, json, pandas as pd
@@ -13,7 +10,6 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from pdfminer.high_level import extract_text
 from docx import Document
 from openai import OpenAI
-from langdetect import detect
 
 try:
     import camelot
@@ -77,20 +73,23 @@ def normalize_label(label: str):
 # ---------- Regex Extraction ----------
 
 def extract_from_text(text: str):
-    """Extract values directly using regex from raw text."""
+    """Extract values directly using regex from raw text (now handles dotted patterns)."""
     data = {}
+    # Accept spaces, dots, dashes, or colons between label and number
+    gap = r"[\s\.\:\-–—…]*"
+
     patterns = {
-        "assets": r"total assets[\s:]*([\d,\.]+)",
-        "liabilities": r"total liabilities[\s:]*([\d,\.]+)",
-        "equity": r"total equity[\s:]*([\d,\.]+)",
-        "revenue": r"(?:revenue|turnover|income from operations)[\s:]*([\d,\.]+)",
-        "profit": r"(?:net profit|profit for the year|net income)[\s:]*([\d,\.]+)",
-        "ebit": r"ebit[\s:]*([\d,\.]+)",
-        "ebitda": r"ebitda[\s:]*([\d,\.]+)",
-        "inventory": r"(?:inventory|inventories)[\s:]*([\d,\.]+)",
-        "cash": r"(?:cash and cash equivalents|cash)[\s:]*([\d,\.]+)",
-        "receivables": r"(?:trade receivables|accounts receivable)[\s:]*([\d,\.]+)",
-        "cost_of_sales": r"(?:cost of sales|operating expenses)[\s:]*([\d,\.]+)",
+        "assets": rf"total assets{gap}([\d,\.]+)",
+        "liabilities": rf"total liabilities{gap}([\d,\.]+)",
+        "equity": rf"total equity{gap}([\d,\.]+)",
+        "revenue": rf"(?:revenue|turnover|income from operations){gap}([\d,\.]+)",
+        "profit": rf"(?:net profit|profit for the year|net income){gap}([\d,\.]+)",
+        "ebit": rf"\bebit{gap}([\d,\.]+)",
+        "ebitda": rf"\bebitda{gap}([\d,\.]+)",
+        "inventory": rf"(?:inventory|inventories){gap}([\d,\.]+)",
+        "cash": rf"(?:cash and cash equivalents|cash){gap}([\d,\.]+)",
+        "receivables": rf"(?:trade receivables|accounts receivable){gap}([\d,\.]+)",
+        "cost_of_sales": rf"(?:cost of sales|operating expenses){gap}([\d,\.]+)",
     }
 
     for key, pattern in patterns.items():
@@ -164,7 +163,7 @@ async def upload_file(file: UploadFile = File(...)):
 
         multiplier = detect_unit_multiplier(text)
 
-        # 2️⃣ Extract with regex
+        # 2️⃣ Extract with improved regex
         structured = extract_from_text(text)
         for k in structured:
             structured[k] = structured[k] * multiplier
@@ -202,7 +201,7 @@ async def upload_file(file: UploadFile = File(...)):
             if diff > 0.05 * structured["assets"]:
                 print(f"⚠️ Balance sheet mismatch ({diff})")
 
-        print("✅ Extracted financial data:", structured)
+        print("🧾 Extracted fields for analysis:", json.dumps(structured, indent=2))
 
         return {
             "status": "success",
