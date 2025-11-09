@@ -1,12 +1,11 @@
 """
-Braivix – Bulletproof Financial Extraction (Multilingual + Structured)
-----------------------------------------------------------------------
-Reads PDFs, Excels, CSVs, and Word docs.
-1. Extracts tables (Camelot, pandas)
-2. Normalizes multilingual labels
-3. Detects units (millions, thousands)
-4. Validates accounting consistency
-5. Uses GPT-4o-mini only if data missing or low confidence
+Bravix – Bulletproof Financial Extraction (v2 Universal Parser)
+----------------------------------------------------------------
+Now detects:
+- 'Total Assets', 'Total Liabilities', 'Total Equity'
+- 'Revenue', 'Operating Profit', 'Net Profit', 'EBIT', 'EBITDA'
+- 'Cash and Cash Equivalents', 'Inventories', 'Receivables'
+- Compatible with CMA CGM, Deloitte, PwC, IFRS reports
 """
 
 import io, os, re, json, pandas as pd
@@ -17,15 +16,15 @@ from openai import OpenAI
 from langdetect import detect
 
 try:
-    import camelot  # For structured PDF table parsing
+    import camelot
 except ImportError:
     camelot = None
 
 router = APIRouter()
 
-# ---------------------------------------------------------------------
-# 🔐 Helper Utilities
-# ---------------------------------------------------------------------
+
+# ---------- Helper Utilities ----------
+
 def get_openai_client():
     key = os.getenv("OPENAI_API_KEY")
     if not key:
@@ -34,9 +33,8 @@ def get_openai_client():
 
 
 def safe_float(val):
-    """Convert possible strings or None to float safely."""
     try:
-        if val in [None, "null", "", "NaN"]:
+        if val in [None, "", "NaN", "null"]:
             return None
         cleaned = re.sub(r"[^\d\.\-]", "", str(val))
         return float(cleaned) if cleaned else None
@@ -45,7 +43,6 @@ def safe_float(val):
 
 
 def detect_unit_multiplier(text: str) -> int:
-    """Detect whether figures are in thousands or millions."""
     text_lower = text.lower()
     if "in millions" in text_lower or "in € million" in text_lower:
         return 1_000_000
@@ -55,132 +52,104 @@ def detect_unit_multiplier(text: str) -> int:
         return 1
 
 
-def normalize_language_keys(label: str, lang: str):
-    """Normalize multilingual label to English base form."""
+def normalize_label(label: str):
     label = label.lower().strip()
-    mappings = {
-        "assets": ["assets", "activa", "actif"],
-        "liabilities": ["liabilities", "passiva", "passif"],
-        "equity": ["equity", "vermogen", "capitaux propres"],
-        "current assets": ["current assets", "vlottende activa", "actif circulant"],
-        "current liabilities": ["current liabilities", "kortlopende schulden", "passif courant"],
-        "inventory": ["inventory", "voorraden", "stocks"],
-        "cash": ["cash", "liquide middelen", "trésorerie"],
-        "revenue": ["revenue", "omzet", "chiffre d’affaires"],
-        "profit": ["profit", "nettoresultaat", "résultat net"],
-        "ebitda": ["ebitda", "bedrijfsresultaat", "résultat d’exploitation"]
+    replacements = {
+        "assets": ["total assets", "assets"],
+        "liabilities": ["total liabilities", "liabilities"],
+        "equity": ["total equity", "shareholders’ equity", "shareholders' equity"],
+        "revenue": ["revenue", "income", "turnover", "sales"],
+        "profit": ["profit", "net income", "net result"],
+        "ebitda": ["ebitda", "operating profit", "operating income"],
+        "ebit": ["ebit", "earnings before interest"],
+        "inventory": ["inventory", "inventories", "stock"],
+        "cash": ["cash", "cash and cash equivalents"],
+        "receivables": ["trade receivables", "accounts receivable", "customers"],
+        "cost_of_sales": ["cost of sales", "operating expenses"],
     }
-    for eng, variants in mappings.items():
-        if any(v in label for v in variants):
-            return eng
+    for key, terms in replacements.items():
+        for term in terms:
+            if term in label:
+                return key
     return None
 
 
-# ---------------------------------------------------------------------
-# 🧮 Structured Extraction Layer
-# ---------------------------------------------------------------------
-def extract_structured_data(text: str, file_bytes: bytes, filename: str):
-    """Extract structured numbers from tables."""
+# ---------- Regex Extraction ----------
+
+def extract_from_text(text: str):
+    """Extract values directly using regex from raw text."""
     data = {}
-    lang = "en"
-    try:
-        lang = detect(text)
-    except:
-        pass
+    patterns = {
+        "assets": r"total assets[\s:]*([\d,\.]+)",
+        "liabilities": r"total liabilities[\s:]*([\d,\.]+)",
+        "equity": r"total equity[\s:]*([\d,\.]+)",
+        "revenue": r"(?:revenue|turnover|income from operations)[\s:]*([\d,\.]+)",
+        "profit": r"(?:net profit|profit for the year|net income)[\s:]*([\d,\.]+)",
+        "ebit": r"ebit[\s:]*([\d,\.]+)",
+        "ebitda": r"ebitda[\s:]*([\d,\.]+)",
+        "inventory": r"(?:inventory|inventories)[\s:]*([\d,\.]+)",
+        "cash": r"(?:cash and cash equivalents|cash)[\s:]*([\d,\.]+)",
+        "receivables": r"(?:trade receivables|accounts receivable)[\s:]*([\d,\.]+)",
+        "cost_of_sales": r"(?:cost of sales|operating expenses)[\s:]*([\d,\.]+)",
+    }
 
-    multiplier = detect_unit_multiplier(text)
-
-    if filename.endswith(".pdf") and camelot:
-        try:
-            tables = camelot.read_pdf(io.BytesIO(file_bytes), pages="1-end")
-            for table in tables:
-                df = table.df
-                for i, row in df.iterrows():
-                    joined = " ".join(str(x) for x in row.tolist())
-                    key = normalize_language_keys(joined, lang)
-                    if key:
-                        nums = re.findall(r"[-+]?\d*\.\d+|\d+", joined)
-                        if nums:
-                            data[key] = safe_float(nums[-1]) * multiplier
-        except Exception as e:
-            print("⚠️ Camelot parse failed:", e)
-
-    elif filename.endswith(".xlsx"):
-        df = pd.read_excel(io.BytesIO(file_bytes))
-        for col in df.columns:
-            key = normalize_language_keys(str(col), lang)
-            if key:
-                num = safe_float(df[col].iloc[-1])
-                if num is not None:
-                    data[key] = num * multiplier
-
-    elif filename.endswith(".csv"):
-        df = pd.read_csv(io.BytesIO(file_bytes))
-        for col in df.columns:
-            key = normalize_language_keys(str(col), lang)
-            if key:
-                num = safe_float(df[col].iloc[-1])
-                if num is not None:
-                    data[key] = num * multiplier
-
-    # Basic totals check
-    if "assets" in data and "liabilities" in data and "equity" not in data:
-        data["equity"] = round(data["assets"] - data["liabilities"], 2)
+    for key, pattern in patterns.items():
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            val = safe_float(match.group(1))
+            if val:
+                data[key] = val
 
     return data
 
 
-# ---------------------------------------------------------------------
-# 🧠 GPT Verification / Fallback
-# ---------------------------------------------------------------------
+# ---------- AI Fallback ----------
+
 def extract_with_gpt(text: str):
-    """Ask GPT to extract missing values only."""
     client = get_openai_client()
     prompt = f"""
     You are a financial data extractor.
-    Identify values (in millions if stated) for:
-    current_assets, current_liabilities, inventory, cash,
-    total_assets, total_liabilities, equity, revenue, profit, ebitda.
+    Extract key values (use millions if noted) for:
+    assets, liabilities, equity, revenue, profit, ebit, ebitda, cash, inventory, receivables.
 
-    Return ONLY valid JSON:
+    Return valid JSON only, e.g.:
     {{
-      "current_assets": ...,
-      "current_liabilities": ...,
-      "inventory": ...,
-      "cash": ...,
       "assets": ...,
       "liabilities": ...,
       "equity": ...,
       "revenue": ...,
       "profit": ...,
-      "ebitda": ...
+      "ebit": ...,
+      "ebitda": ...,
+      "cash": ...,
+      "inventory": ...,
+      "receivables": ...
     }}
     """
     try:
         res = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt + text[:7000]}],
+            messages=[{"role": "user", "content": prompt + "\n\n" + text[:7000]}],
             temperature=0,
-            max_tokens=600,
+            max_tokens=700,
         )
         match = re.search(r"\{.*\}", res.choices[0].message.content, re.DOTALL)
         return json.loads(match.group(0)) if match else {}
     except Exception as e:
-        print("❌ GPT Fallback failed:", e)
+        print("❌ GPT extraction failed:", e)
         return {}
 
 
-# ---------------------------------------------------------------------
-# 🚀 Upload Route
-# ---------------------------------------------------------------------
+# ---------- Upload Endpoint ----------
+
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """Accepts uploads, extracts key data with multi-step verification."""
+    """Accepts file, extracts core financial data via regex + fallback."""
     try:
         name = file.filename.lower()
         raw = await file.read()
 
-        # --- Step 1: Extract text ---
+        # 1️⃣ Extract text
         if name.endswith(".pdf"):
             text = extract_text(io.BytesIO(raw)) or ""
         elif name.endswith(".docx"):
@@ -193,44 +162,55 @@ async def upload_file(file: UploadFile = File(...)):
         else:
             text = raw.decode("utf-8", errors="ignore")
 
-        # --- Step 2: Structured extraction ---
-        structured = extract_structured_data(text, raw, name)
-        print("📊 Structured data:", structured)
+        multiplier = detect_unit_multiplier(text)
 
-        # --- Step 3: Regex supplement ---
-        regex_data = {}
-        for k, v in extract_structured_data(text, raw, name).items():
-            regex_data[k] = v
+        # 2️⃣ Extract with regex
+        structured = extract_from_text(text)
+        for k in structured:
+            structured[k] = structured[k] * multiplier
 
-        # Merge
-        for k, v in regex_data.items():
-            structured.setdefault(k, v)
+        # 3️⃣ Try structured tables (camelot)
+        if not structured and name.endswith(".pdf") and camelot:
+            try:
+                tables = camelot.read_pdf(io.BytesIO(raw), pages="1-end")
+                for table in tables:
+                    df = table.df
+                    for _, row in df.iterrows():
+                        joined = " ".join(str(x) for x in row.tolist())
+                        key = normalize_label(joined)
+                        if key:
+                            nums = re.findall(r"[-+]?\d*\.\d+|\d+", joined)
+                            if nums:
+                                structured[key] = safe_float(nums[-1]) * multiplier
+            except Exception as e:
+                print("⚠️ Camelot failed:", e)
 
-        # --- Step 4: AI Fallback if needed ---
-        needed_keys = ["assets", "liabilities", "equity", "revenue", "profit", "ebitda"]
-        if any(k not in structured for k in needed_keys):
+        # 4️⃣ AI Fallback if still missing
+        needed = ["assets", "liabilities", "equity", "revenue", "profit"]
+        if any(k not in structured for k in needed):
             gpt_data = extract_with_gpt(text)
             for k, v in gpt_data.items():
                 structured.setdefault(k, v)
 
-        # --- Step 5: Cross-validate ---
+        # 5️⃣ Derive missing equity if possible
+        if "assets" in structured and "liabilities" in structured and "equity" not in structured:
+            structured["equity"] = round(structured["assets"] - structured["liabilities"], 2)
+
+        # 6️⃣ Validation
         if structured.get("assets") and structured.get("liabilities") and structured.get("equity"):
             diff = abs((structured["liabilities"] + structured["equity"]) - structured["assets"])
-            if diff > 0.02 * structured["assets"]:
-                print(f"⚠️ Warning: Balance mismatch ({diff})")
+            if diff > 0.05 * structured["assets"]:
+                print(f"⚠️ Balance sheet mismatch ({diff})")
 
-        # --- Step 6: Confidence ---
-        confidence = 0.95 if all(structured.values()) else 0.75
+        print("✅ Extracted financial data:", structured)
 
-        print("✅ Final extracted:", structured)
         return {
             "status": "success",
-            "confidence": confidence,
-            "message": "File parsed successfully",
+            "message": "AI financial analysis completed successfully.",
             "data": {
                 "raw_text": text,
-                "indicators": structured,
-            },
+                "indicators": structured
+            }
         }
 
     except Exception as e:
