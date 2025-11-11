@@ -1,7 +1,8 @@
 """
-Bravix – Unified AI Financial Analysis & Credit Evaluation (v4.2 Stable)
+Bravix – Unified AI Financial Analysis & Credit Evaluation (v4.3 Stable)
 ------------------------------------------------------------------------------
 ✅ Unpacks nested 'indicators' dictionary correctly
+✅ Adds /report/download endpoint for saved reports
 ✅ Adds full debug logs for every stage
 ✅ Computes accurate financial ratios and AI-based risk reports
 """
@@ -9,6 +10,7 @@ Bravix – Unified AI Financial Analysis & Credit Evaluation (v4.2 Stable)
 import os
 import json
 from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import FileResponse
 from openai import OpenAI
 from dotenv import load_dotenv
 from app.utils.financial_indicators import compute_all
@@ -16,6 +18,7 @@ from app.utils.financial_indicators import compute_all
 # Load environment
 load_dotenv()
 router = APIRouter()
+
 
 # --------------------------------------------------------------
 # 🔐 Helper functions
@@ -110,7 +113,7 @@ Structure your report in 5 concise sections:
 
 
 # --------------------------------------------------------------
-# 🚀 API Route
+# 🚀 API Route: Analyze
 # --------------------------------------------------------------
 @router.post("/analyze")
 async def analyze(request: Request):
@@ -125,11 +128,8 @@ async def analyze(request: Request):
         if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="Invalid JSON payload.")
 
-        # ✅ NEW: extract nested indicators if present
-        if "indicators" in data and isinstance(data["indicators"], dict):
-            indicators_data = data["indicators"]
-        else:
-            indicators_data = data  # fallback for flat payloads
+        # ✅ Extract nested indicators if present
+        indicators_data = data.get("indicators", data)
 
         # Step 1: Normalize extracted numbers
         normalized = normalize_data(indicators_data)
@@ -169,7 +169,7 @@ async def analyze(request: Request):
             },
         }
 
-        # Step 5: Save debug output
+        # Step 5: Save analysis for download
         os.makedirs("/tmp", exist_ok=True)
         with open("/tmp/last_analysis.json", "w") as f:
             json.dump(result, f, indent=2)
@@ -180,3 +180,36 @@ async def analyze(request: Request):
     except Exception as e:
         print(f"❌ /analyze failed: {e}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
+
+
+# --------------------------------------------------------------
+# 📥 Report Download Endpoint
+# --------------------------------------------------------------
+@router.get("/report/download")
+async def download_report():
+    """
+    Serve the latest analysis report saved in /tmp as a downloadable file.
+    If a PDF exists, return it; otherwise, fall back to JSON.
+    """
+    json_path = "/tmp/last_analysis.json"
+    pdf_path = "/tmp/last_analysis.pdf"
+
+    if os.path.exists(pdf_path):
+        print("📄 Returning latest PDF report")
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            filename="Braivix_Report.pdf"
+        )
+
+    elif os.path.exists(json_path):
+        print("📊 Returning latest JSON report")
+        return FileResponse(
+            json_path,
+            media_type="application/json",
+            filename="Braivix_Report.json"
+        )
+
+    else:
+        print("❌ No report found in /tmp")
+        raise HTTPException(status_code=404, detail="No report available for download.")
