@@ -1,10 +1,10 @@
 """
-Bravix – Unified AI Financial Analysis & Credit Evaluation (v4.3 Stable)
+Bravix – Unified AI Financial Analysis & Credit Evaluation (v4.4 PDF Edition)
 ------------------------------------------------------------------------------
 ✅ Unpacks nested 'indicators' dictionary correctly
-✅ Adds /report/download endpoint for saved reports
 ✅ Adds full debug logs for every stage
 ✅ Computes accurate financial ratios and AI-based risk reports
+✅ Generates downloadable PDF reports (via WeasyPrint)
 """
 
 import os
@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 from openai import OpenAI
 from dotenv import load_dotenv
 from app.utils.financial_indicators import compute_all
+from weasyprint import HTML
 
 # Load environment
 load_dotenv()
@@ -183,33 +184,64 @@ async def analyze(request: Request):
 
 
 # --------------------------------------------------------------
-# 📥 Report Download Endpoint
+# 📥 Report Download Endpoint (Generates Real PDF)
 # --------------------------------------------------------------
 @router.get("/report/download")
 async def download_report():
     """
-    Serve the latest analysis report saved in /tmp as a downloadable file.
-    If a PDF exists, return it; otherwise, fall back to JSON.
+    Generate and serve a valid PDF report based on /tmp/last_analysis.json.
+    If JSON doesn't exist, return 404.
     """
     json_path = "/tmp/last_analysis.json"
     pdf_path = "/tmp/last_analysis.pdf"
 
-    if os.path.exists(pdf_path):
-        print("📄 Returning latest PDF report")
-        return FileResponse(
-            pdf_path,
-            media_type="application/pdf",
-            filename="Braivix_Report.pdf"
-        )
+    if not os.path.exists(json_path):
+        raise HTTPException(status_code=404, detail="No report data available.")
 
-    elif os.path.exists(json_path):
-        print("📊 Returning latest JSON report")
-        return FileResponse(
-            json_path,
-            media_type="application/json",
-            filename="Braivix_Report.json"
-        )
+    # Load analysis data
+    with open(json_path, "r") as f:
+        report = json.load(f)
 
-    else:
-        print("❌ No report found in /tmp")
-        raise HTTPException(status_code=404, detail="No report available for download.")
+    # Generate simple HTML layout for PDF
+    html_content = f"""
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body {{ font-family: 'Helvetica Neue', Arial, sans-serif; margin: 40px; color: #1a1a1a; }}
+        h1 {{ color: #003366; font-size: 28px; }}
+        h2 {{ color: #1a1a1a; font-size: 20px; margin-top: 25px; }}
+        table {{ width: 100%; border-collapse: collapse; margin-top: 12px; }}
+        th, td {{ border: 1px solid #ccc; padding: 6px; font-size: 12px; }}
+        th {{ background-color: #f3f3f3; text-align: left; }}
+      </style>
+    </head>
+    <body>
+      <h1>Braivix Financial Analysis Report</h1>
+      <h2>Summary</h2>
+      <p><b>Overall Health Score:</b> {report.get('overall_health_score')}</p>
+      <p><b>Company Class:</b> {report['classification'].get('company_class')}</p>
+      <p><b>Risk Category:</b> {report['classification'].get('risk_category')}</p>
+      <p><b>Credit Decision:</b> {report['classification'].get('credit_decision')}</p>
+
+      <h2>Indicators</h2>
+      <table>
+        <tr><th>Indicator</th><th>Value</th><th>Status</th></tr>
+        {''.join([f"<tr><td>{i['name']}</td><td>{i['value']}</td><td>{i['status']}</td></tr>" for i in report['indicators']])}
+      </table>
+
+      <h2>AI Report</h2>
+      <p style="white-space: pre-wrap;">{report.get('ai_report')}</p>
+    </body>
+    </html>
+    """
+
+    # Generate PDF
+    HTML(string=html_content).write_pdf(pdf_path)
+    print("✅ Generated Braivix_Report.pdf")
+
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename="Braivix_Report.pdf"
+    )
